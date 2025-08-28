@@ -5,16 +5,16 @@ import time
 # !{sys.executable} -m pip install qcircuit
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-
+import random
 import matplotlib.pyplot as plt
 
 from qiskit.circuit import QuantumCircuit, Parameter, ParameterVector
 import qiskit
 from qiskit import *
-from qiskit_algorithms.optimizers import COBYLA
+from qiskit_algorithms.optimizers import COBYLA, SPSA
 from qiskit_aer import AerSimulator
 from qiskit_aer import Aer
-from squlearn.optimizers import Adam, SPSA
+from squlearn.optimizers import Adam
 
 from squlearn import Executor
 
@@ -23,9 +23,10 @@ from squlearn.kernel.qsvr import QSVR
 from squlearn.kernel.qgpr import QGPR
 from squlearn.encoding_circuit.layered_encoding_circuit import LayeredEncodingCircuit, Layer
 from squlearn.kernel import ProjectedQuantumKernel, KernelOptimizer, FidelityKernel
+from squlearn.kernel.loss import TargetAlignment
 from Training_Functions import MSE_Score
-from sklearn.linear_model import Ridge
-from Circuit_Classes import ZZ_featuremap
+from sklearn.kernel_ridge import KernelRidge
+from qiskit.circuit.library import ZZFeatureMap
 #from QiskitRegressor import *
 from sklearn.model_selection import GridSearchCV
 from joblib import dump, load
@@ -34,7 +35,9 @@ from sklearn.svm import SVR
 from sklearn.gaussian_process import GaussianProcessRegressor
 import itertools
 from FunctionEncoder import *
+import csv
 
+#Enviroment variables allow a job sumbission script to submit many similar jobs
 degree = os.getenv("ENCODING_DEGREE")
 if not degree == "atan":
     degree = int(degree)
@@ -48,18 +51,22 @@ data_format = os.getenv("DATA_SETUP")
 date = os.getenv("RUN_DATE")
 hyper_optimized = os.getenv("HYPERPARAMETERS")
 num_qubits = int(os.getenv("NUM_QUBITS"))
-job_num = os.getenv("JOB_NUM")
+job_num = 0 #os.getenv("JOB_NUM")
 trainable = os.getenv("TRAINABLE")
+basis = "STO-3G" #os.getenv("BASIS")
+scale = "Water-Scaled"
+measure = os.getenv("MEASURE")
+percent_data = float(os.getenv("PERCENT"))
 print("Qiksit Version: ",qiskit.__version__)
-if model_type == "QNN":
-    n_jobs = 16
-    os.environ["OMP_NUM_THREADS"] = str(n_jobs)
 
-def learning_rate(iteration, transition_begin = 0, transition_steps = 1, init_value = 0.08, decay_rate = 0.1):
-    rate_factor = ((iteration - transition_begin) / transition_steps)
-    decayed_value = init_value * (decay_rate ** rate_factor)
-    return decayed_value
+#random.seed(42)
 
+# def learning_rate(iteration, transition_begin = 0, transition_steps = 450, init_value = 0.08, decay_rate = 0.1):
+#     rate_factor = ((iteration - transition_begin) / transition_steps)
+#     decayed_value = init_value * (decay_rate ** rate_factor)
+#     return decayed_value
+
+#example functions that can be applied to features
 def degree_relation_function(expression, num_parameters):
     num_params = degree + 1
     if degree <= 0:
@@ -75,50 +82,20 @@ def atan_relation_function(expression, num_parameters):
     num_params = 1
     param = ParameterVector("Phi", num_parameters + num_params)[num_parameters:]
     return param[0] * np.arctan(expression)
-#def run_qnn():
-#    X_train = X_train.reshape(-1,64,5)
-#    X_test = X_test.reshape(-1,64,5)
-#    y_train = y_train(-1, 64)
-#    y_test = y_test(-1, 64)
 
-#    num_qubits = 5
-#    RUD = 1
-#    AL = 5
+"""
+    Train a quantum model that uses sQULearns predeveloped quantum models.
 
-#    optimization_level = 2
-#    shots = 3072
-    # shots = 1024.0 * 1
-#    resilience_level = 1
+    args:
+        circuit_struct = The encoding circuit you want to use
+        degree = trainable parameter function
+        layers = number of reupload layers
+        model_type = the type of model (IE QSVR vs QKRR)
 
-#    qc = circuit(num_qubits,RUD,AL)
-
-#    observables_labels = ''.join(['I']*(num_qubits-1))+"Z"
-
-#    model = QiskitRegressor(qc,
-#                        num_qubits,
-#                        AL,
-#                        RUD,
-#                        'statevector', #'fake',
-#                        observables_labels,
-#                        channel='ibm_quantum',
-#                        instance='ibm-q/open/main',
-#                        parameterpath = None,
-#                        optimization_level = optimization_level,
-#                        resilience_level = resilience_level,
-#                        shots = shots,
-#                        iterations = 500,
-#                        verbose = True,
-#                        n_jobs = n_jobs)
-#    model.fit(X_train,y_train)
-
-#    predictions = model.predict(X_test)
-#    r2 = r2_score(y_test.flatten(), predictions.flatten())
-#    mse = mean_squared_error(y_test.flatten(), predictions.flatten())
-#    print(f"QNN R2 score is {r2}")
-#    print(f"QNN MSE score is {mse}")
-
+    returns
+"""
 def quantum_kernel_method(circuit_struct, degree, layers, model_type):
-    # num_features = os.getenv("NUM_FEATURES")
+    #by circuit_struct choose circuit
     if circuit_struct == "YZ_CX":
         encoding_scheme = YZ_CX_EncodingCircuit(num_qubits, num_features, layers)
         encoding_circuit = encoding_scheme.get_circuit(ParameterVector("X",num_features),ParameterVector("P",encoding_scheme.num_parameters))
@@ -126,8 +103,8 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
         encoding_scheme = ChebyshevPQC(num_qubits, num_features,layers, nonlinearity="arctan")
         encoding_circuit = encoding_scheme.get_circuit(ParameterVector("X",num_features),ParameterVector("P",encoding_scheme.num_parameters))
     elif circuit_struct == "ZZ_map":
-        encoding_scheme = ZZ_featuremap(num_features, layers, 0, "linear")
-        encoding_circuit = encoding_scheme.get_circuit()
+        encoding_scheme = ZZFeatureMap(num_features, layers, entanglement="linear")
+        encoding_circuit = encoding_scheme.decompose()
     elif circuit_struct == "ParamZ":
         encoding_scheme = ParamZFeatureMap(num_qubits, num_features, layers, entangling=True)
         encoding_circuit = encoding_scheme.get_circuit(ParameterVector("X",num_features),ParameterVector("P",encoding_scheme.num_parameters))
@@ -149,52 +126,59 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
             function_encoded_circuit = encoding_circuit
     else:
         function_encoded_circuit = FunctionEncoder(encoding_circuit, atan_relation_function, False)
-    #if kernel_type == "Fidelity":
-    #    function_encoded_circuit = function_encoded_circuit.to_gate()
-    encoding_circuit = QiskitEncodingCircuit(function_encoded_circuit, parameter_label=["Phi","P","θ"], feature_label="X")
+
+    #convert circuit into a sQULearn encoding circuit
+    print(function_encoded_circuit)
+    encoding_circuit = QiskitEncodingCircuit(function_encoded_circuit, parameter_label=["Phi","P","θ"], feature_label=["X","x"])
     num_params = encoding_circuit.num_parameters
-    initial_parameters = (np.random.rand(num_params) - 0.5) * 2 * np.pi
+
+    #Set parameters between [-pi, pi]
+    initial_parameters = (np.random.rand(num_params) * 2 * np.pi) - np.pi
     print(initial_parameters)
     print(encoding_circuit.get_circuit(ParameterVector("X", num_features), ParameterVector("P", encoding_circuit.num_parameters) ) )
+
+    #Kernel can be changed
     if kernel_type == "Projected":
         kernel = ProjectedQuantumKernel(
             encoding_circuit,
-            executor=Executor(Aer.get_backend("aer_simulator"), shots=1024)
+            executor=Executor(Aer.get_backend("aer_simulator"), shots=1024),
+            measurement=measure
         )
     elif kernel_type == "Fidelity":
         kernel = FidelityKernel(encoding_circuit, executor=Executor(Aer.get_backend("aer_simulator"), shots=1024))
+
+    #Date can be used to sperate the data by when it was run. I did not really use it
     if date != "" and not date is None:
         start_path = f"models/{date}/{molecule_structure}"
     else:
         start_path = f"models/{molecule_structure}"
-    start_path = start_path + f"/{trainable.upper()}_{kernel_type.upper()}"
-    # set up the optimizer
-    # adam_opt = Adam(options={"maxiter":1, "lr": learning_rate, "tol":0.001})
+    start_path = start_path + f"/{trainable.upper()}_{kernel_type.upper()}_{basis}_"
 
     # if trainable kernel set up the kernel optimizer
     if trainable == "True":
-        cobyla_opt = COBYLA(maxiter=500)
-        kta_loss = MSE_Score(model_type, noisy=True)
+        kta_loss = TargetAlignment() #-> Train by matching matrix to ideal
+        # kta_loss = MSE_Score(model_type, noisy=True) -> Train by model MSE
+        cobyla_opt = COBYLA(maxiter=200) #COBYLA optimizer used as it is gradient free
         kernel = KernelOptimizer(quantum_kernel=kernel, loss = kta_loss, optimizer=cobyla_opt, initial_parameters=initial_parameters)
 
     if model_type == "qsvr":
         model = QSVR(kernel)
         param_grid = {
-            "C":[0.1, 1, 5, 10, 50, 100, 1000],
-            "epsilon":[0.1,0.05,0.01,0.005,0.001,0.0001]
+            "C":[0.1, 0.25, 0.5, 1, 5, 10],
+            "epsilon":[0.1, 0.05, 0.03, 0.08]
         }
     elif model_type == "qgpr":
         model = QGPR(kernel)
     elif model_type == "qkrr":
         model = QKRR(kernel)
         param_grid = {
-            'alpha':[0.0001, 0.001, 0.01, 0.1, 1, 10, 100],
-            'fit_intercept':[True, False],
-            'solver':['auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga'],
+            'alpha':[0.01, 0.1, 0.2, 0.5, 1, 10]
         }
+
     print(start_path)
     print("Starting training of model")
     start_time = time.time()
+    #Optionally optimize hyperparameters
     if hyper_optimized == "OPTIMIZED":
         model.fit(X_train, y_train)
             # Extract all the lists of options from the dictionary's values
@@ -209,42 +193,46 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
         print("\nGenerating combinations...")
         # Generate all combinations using itertools.product
         # The '*' unpacks the list of lists into separate arguments for product
-        best_model = model
+        best_model = None
         best_r2 = -50
         best_params = {}
+        kernel = model.quantum_kernel
+        model = None
+        #I had some difficulty using sQULearn's gridsearch class so this is a rough recreation
         for combination in itertools.product(*all_options_lists):
             combination = dict(zip(param_grid.keys(), combination))
             if model_type == "qsvr":
-                kernel = model.quantum_kernel
+                #kernel = model.quantum_kernel
                 temp_model = QSVR(kernel, **combination)
             elif model_type == "qkrr":
-                kernel = model._quantum_kernel
+                #kernel = model._quantum_kernel
                 temp_model = QKRR(kernel, **combination)
             temp_model.fit(X_train, y_train)
             predictions = temp_model.predict(X_train)
             r2 = r2_score(y_train.flatten(), predictions.flatten())
             print(f"For {combination}: R2 = {r2}")
-            if r2 > best_r2:
+            if r2 >= best_r2:
                 best_r2 = r2
-                best_model = temp_model
+                #best_model = temp_model
                 best_params = combination
+            temp_model = None
+        best_model = QSVR(kernel, **best_params)
+        best_model.fit(X_train, y_train)
         print(f"Best R2: {best_r2}")
         print(f"Best hyperparameters: {best_params}")
         model = best_model
-        #grid_search = GridSearchCV(model, param_grid, cv=5, scoring="r2", verbose=1)
-        #grid_search.fit(X_train, y_train)
-        #print(grid_search.best_params_)
-        #print(f"Model Train R2: {grid_search.best_score_}")
-        #model = grid_search.best_estimator_
-        log_path = start_path + f"_{hyper_optimized}_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type.upper()}.bin"
+        best_model = None
+        log_path = start_path + f"_{hyper_optimized}_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type.upper()}_{percent_data}"
     else:
         model.fit(X_train, y_train)
-        log_path = start_path + f"_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type.upper()}.bin"
+        log_path = start_path + f"_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type.upper()}_{percent_data}"
     end_time = time.time()
     if not job_num is None:
         log_path = log_path + f"-{job_num}"
+    log_path = log_path + f"_{measure}.bin"
     print(log_path)
-    # open(log_path, "w").close()
+    
+
     print(f"Fitting the model took {end_time-start_time} seconds")
     if trainable == "True":
         print(f"Optimized Parameters: {kernel.get_optimal_parameters()}")
@@ -253,29 +241,74 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
     predictions = model.predict(X_test)
     print(f"The r2 score on the test set is {r2_score(y_test.flatten(), predictions.flatten())}")
     print(f"Test MSE: {mean_squared_error(y_test.flatten(), predictions.flatten())}")
+
+    #Save model in 
     if trainable == "True":
-        loss_history = kta_loss.train_loss_history
-        progress = {"Training Time": end_time-start_time, "Loss History":loss_history, "R2 Score":r2_score(y_test.flatten(), predictions.flatten()), "Model":model}
+        # loss_history = kta_loss.train_loss_history
+        # progress = {"Training Time": end_time-start_time, "Loss History":loss_history, "R2 Score":r2_score(y_test.flatten(), predictions.flatten()), "Model":model}
+       progress = {"Training Time": end_time-start_time, "R2 Score":r2_score(y_test.flatten(), predictions.flatten()), "Model":model}
     else:
         progress = progress = {"Training Time": end_time-start_time, "R2 Score":r2_score(y_test.flatten(), predictions.flatten()), "Model":model}
     joblib.dump(progress, log_path)
 
+    path = f"{percent_data}-{num_features}-{basis}-{molecule_structure}-R2.csv"
+    output = [f"{trainable}-{model_type}", f"{circuit_struct}-{str(degree).upper()}-{layers}-{job_num}", r2_score(y_test.flatten(), predictions.flatten())]
+    # Open the file from path in append mode and write the test score and circuit name
+    with open(path, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        # Append the label and value as a new row
+        writer.writerow(output)
+
+
+    #THIS IS AN OPTIONAL PART TO RECORD THE TEST T2 VALUES AFRER TRAINING    
+    # water_t2_path = "Water_Energy/" + path
+
+    # unscaledy_test = water_t2_scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+    # unscaledy_predictions = water_t2_scaler.inverse_transform(predictions.reshape(-1, 1)).flatten()
+    # print(unscaledy_predictions.shape)
+
+    # # Combine the lists into a single list of tuples for easier iteration
+    # data_to_write = zip(unscaledy_test, unscaledy_predictions)
+
+    # with open(water_t2_path, mode='a', newline='') as file:
+    #     fieldnames = ['Molecule', 'Circuit', 'Expected', 'Predicted', 't2_num']
+    #     writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+    #     # Check if the file is empty to write the header
+    #     if file.tell() == 0:
+    #         writer.writeheader()
+    #     num_t2s = int((y_test.shape[0]) / 40)
+    #     count = 0
+    #     # Iterate through the data and write a new row for each pair
+    #     for expected_value, predicted_value in data_to_write:
+    #         row_output = {
+    #             'Molecule': f"{molecule_structure}{count // num_t2s}",
+    #             'Circuit': f"{circuit_struct}_{degree}_{layers}_{job_num}",
+    #             'Expected': expected_value,
+    #             'Predicted': predicted_value,
+    #             't2_num': count % num_t2s
+    #         }
+    #         writer.writerow(row_output)
+    #         time.sleep(0.01)
+    #         count += 1
+
+"""Same principles as quantum_kernel_method"""
 def classical_kernel_method(model_type):
 
     if model_type == "svr":
         model = SVR(kernel="rbf")
         param_grid = {
-            "kernel":["rbf", "linear", "poly", "sigmoid"],
-            "C":[0.1, 1, 5, 10, 50, 100, 1000],
-            "gamma":["scale", "auto", 0.1, 0.01, 1, 10, 50, 100],
-            "epsilon":[0.1,0.05,0.01,0.005,0.001,0.0001]
+            "kernel":["rbf", "polynomial"],
+            "gamma":["auto"],
+            "C":[0.1, 0.5, 1, 5, 10],
+            "epsilon":[0.1, 0.05, 0.03, 0.08]
         }
     elif model_type == "krr":
-        model = Ridge()
+        model = KernelRidge()
         param_grid = {
-            'alpha':[0.0001, 0.001, 0.01, 0.1, 1, 10, 100],
-            'fit_intercept':[True, False],
-            'solver':['auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga'],
+            'kernel':["rbf","polynomial","linear"],
+            'alpha':[0.01, 0.1, 0.2, 0.5, 1, 10],
+            'gamma':["scale", "auto", 0.1, 0.01]
         }
     top = os.getcwd()
     grid_search = GridSearchCV(model, param_grid, cv=5, scoring='r2', verbose=1)
@@ -310,25 +343,137 @@ def classical_kernel_method(model_type):
 
     progress = {"Training Time": end_time-start_time, "R2 Score":r2_score(y_test.flatten(), predictions.flatten()), "Model":model}
     joblib.dump(progress, log_path)
+    path = f"{percent_data}-{num_features}-{basis}-{molecule_structure}-R2.csv"
+    output = [f"", f"Classical-{model_type}", r2_score(y_test.flatten(), predictions.flatten())]
+    with open(path, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        # Append the label and value as a new row
+        writer.writerow(output)
 
-top=os.getcwd()
+    #OPTIONAL T2 RECORDING
+    # water_t2_path = "Water_Energy/" + path
 
-with open(os.path.join(top,rf'Data/STO-3G/{molecule_structure}/scaled/{num_features}_feature_train.bin'),'rb') as f:
-    ddcc_train = joblib.load(f)
+    # unscaledy_test = water_t2_scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+    # unscaledy_predictions = water_t2_scaler.inverse_transform(predictions.reshape(-1, 1)).flatten()
+    # print(unscaledy_predictions.shape)
 
-with open(os.path.join(top,rf'Data/STO-3G/{molecule_structure}/scaled/{num_features}_feature_test.bin'),'rb') as f:
-    ddcc_test = joblib.load(f)
+    # # Combine the lists into a single list of tuples for easier iteration
+    # data_to_write = zip(unscaledy_test, unscaledy_predictions)
 
-with open(os.path.join(top,rf'Data/STO-3G/{molecule_structure}/scaled/t2_scaler.bin'),'rb') as f:
-    ddcc_scaler = joblib.load(f)
-# print(ddcc_train.keys())
-X_ddcc_train, y_ddcc_train = ddcc_train['X'],ddcc_train['y']
-X_ddcc_test, y_ddcc_test = ddcc_test['X'],ddcc_test['y']
+    # with open(water_t2_path, mode='a', newline='') as file:
+    #     fieldnames = ['Molecule', 'Circuit', 'Expected', 'Predicted', 't2_num']
+    #     writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+    #     # Check if the file is empty to write the header
+    #     if file.tell() == 0:
+    #         writer.writeheader()
+    #     num_t2s = int((y_test.shape[0]) / 40)
+    #     count = 0
+    #     # Iterate through the data and write a new row for each pair
+    #     for expected_value, predicted_value in data_to_write:
+    #         row_output = {
+    #             'Molecule': f"{molecule_structure}{count // num_t2s}",
+    #             'Circuit': f"{circuit_struct}_{degree}_{layers}_{job_num}",
+    #             'Expected': expected_value,
+    #             'Predicted': predicted_value,
+    #             't2_num': count % num_t2s}
+    #         writer.writerow(row_output)
+    #         time.sleep(0.01)
+    #         count += 1
+time.sleep(int(job_num)*10)
+
+#allow for training on multiple molecules
+molecules = molecule_structure.split("-")
+
+total_X_test = np.array([])
+total_y_test = np.array([])
+total_X_train = np.array([])
+total_y_train = np.array([])
+for molecule_struct in molecules:
+    top=os.getcwd()
+
+    #scale data relative to water values
+    if scale != "Water-Scaled":
+        with open(rf'Data/{basis}/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
+            ddcc_train = joblib.load(f)
+
+        with open(rf'Data/{basis}/{molecule_struct}/scaled/{num_features}_feature_test.bin','rb') as f:
+            ddcc_test = joblib.load(f)
+
+        with open(rf'Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+            ddcc_scaler = joblib.load(f)
+    else:
+        with open(rf'Data/{basis}/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
+            ddcc_train = joblib.load(f)
+
+        with open(rf'Data/{basis}/{molecule_struct}/scaled/full_feature_test.bin','rb') as f:
+            ddcc_test = joblib.load(f)
+
+        with open(rf'Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+            ddcc_scaler = joblib.load(f)
+
+    # print(ddcc_train.keys())
+    X_ddcc_train, y_ddcc_train = ddcc_train['X'],ddcc_train['y']
+    X_ddcc_test, y_ddcc_test = ddcc_test['X'],ddcc_test['y']
+
+    X_train, y_train = X_ddcc_train, y_ddcc_train
+    X_test, y_test = X_ddcc_test, y_ddcc_test
+
+    #all data is scaled [-1, 1], so unscale data individually and then rescale by water
+    if scale=="Water-Scaled":
+        print("Scaling data")
+        with open(rf"Data/{basis}/Water/scaled/feature_scaler.bin", 'rb') as f:
+            water_feature_scaler = joblib.load(f)
+        with open(rf"Data/{basis}/Water/scaled/t2_scaler.bin", 'rb') as f:
+            water_t2_scaler = joblib.load(f)
+        with open(rf"Data/{basis}/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
+            molecule_feature_scaler = joblib.load(f)
+        with open(rf"Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
+            molecule_t2_scaler = joblib.load(f)
+        print(water_feature_scaler, water_t2_scaler)
+        print(molecule_feature_scaler, molecule_t2_scaler)
+        unscaledX_train = molecule_feature_scaler.inverse_transform(X_train)
+        unscaledy_train = molecule_t2_scaler.inverse_transform(y_train.reshape(-1, 1))
+
+        X_train = np.array(water_feature_scaler.transform(unscaledX_train))
+        y_train = np.array(water_t2_scaler.transform(unscaledy_train).flatten())
+
+        unscaledX_test = molecule_feature_scaler.inverse_transform(X_test)
+        unscaledy_test = molecule_t2_scaler.inverse_transform(y_test.reshape(-1, 1))
+
+        X_test = np.array(water_feature_scaler.transform(unscaledX_test))
+        y_test = np.array(water_t2_scaler.transform(unscaledy_test).flatten())
+
+        #The most important features the best features are fixed at earlier positions in list
+        top5=np.array([20, 21, 24, 23, 22][::-1])
+        top10=np.array([28, 8, 13, 26, 12, 20, 21, 24, 23, 22][::-1])
+        top15=np.array([18, 5, 9, 29, 27, 28, 8, 13, 26, 12, 20, 21, 24, 23, 22][::-1])
+        print(molecule_structure, X_train.shape, X_test.shape)
+        top = top15[:num_features]
+        X_train, X_test = X_train[:, top], X_test[:, top]
+        data_length = int(X_train.shape[0]*percent_data)
+
+        #pick a random percentage of each molecule
+        random_indices = random.sample(range(len(y_train)), data_length)
+        if len(total_X_train) == 0:
+            total_y_train = y_train[random_indices]
+            total_y_test = y_test
+            total_X_train = X_train[random_indices]
+            total_X_test = X_test
+        else:
+            total_y_train = np.append(total_y_train, y_train[random_indices])
+            total_y_test = np.append(total_y_test, y_test)
+            total_X_train = np.vstack((total_X_train, X_train[random_indices]))
+            total_X_test = np.vstack((total_X_test, X_test))
+X_train = total_X_train
+y_train = total_y_train
+X_test = total_X_test
+y_test = total_y_test
 
 # X_train, y_train = X_ddcc_train, y_ddcc_train
 # X_test, y_test = X_ddcc_test, y_ddcc_test
-X_train, y_train = np.clip(X_ddcc_train, -1, 1), y_ddcc_train
-X_test, y_test = np.clip(X_ddcc_test, -1, 1), y_ddcc_test
+#X_train, y_train = X_ddcc_train, y_ddcc_train
+#X_test, y_test = np.clip(X_ddcc_test, -1, 1), y_ddcc_test
 
 # X_train = [X_train[i:i+4] for i in range(0,len(X_train),4)]
 # X_test = [X_test[i:i+4] for i in range(0,len(X_test),4)]
@@ -345,10 +490,7 @@ if date != "" and not date is None:
 else:
     os.makedirs(f"models/{molecule_structure}", exist_ok=True)
 
-if model_type == "QNN":
-     pass
-#    run_qnn()
-elif model_type == "qsvr" or model_type == "qgpr" or model_type == "qkrr":
+if model_type == "qsvr" or model_type == "qgpr" or model_type == "qkrr":
     quantum_kernel_method(circuit_struct, degree, layers, model_type)
 else:
     classical_kernel_method(model_type)

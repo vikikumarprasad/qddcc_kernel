@@ -9,13 +9,16 @@ import symengine as se
 from sympy import default_sort_key
 from sympy import sympify, ordered, Function, Symbol, atan, Add, Mul, Pow, IndexedBase, S # S is SymPy's singleton for things like 0, 1
 
+"""
+    This function takes a quantum circuit and applys a function onto each gate containing a feature
+"""
 def FunctionEncoder(
         encoder_circuit,
         relation_function,
         overwrite_expression = False,
-        feature_label = "X",
+        feature_label = "X", #sQULearn defaults to X
         parameter_label = "θ",
-        combine_type = "Multiply",
+        combine_type = "Multiply", #
         **kwargs
     ):
         num_qubits = encoder_circuit.num_qubits
@@ -33,6 +36,8 @@ def FunctionEncoder(
             # #print(gate)
             new_params = []
             #print(operation.params)
+
+            #SYMPY magic to seperate out all features should save terms 
             for expr in operation.params:
                 next_round = False
                 expression_params = expr.parameters
@@ -61,6 +66,8 @@ def FunctionEncoder(
                     if term_param.is_number:
                         modified_terms.append(term_param)
                         continue
+                    
+                    # Remove wasted parameters (IE Param*Param is functionally the same as just Param)
                     # Keep a list of substitutions to apply to this term
                     substitutions_for_term = {}
                     for symbol in term_param.free_symbols:
@@ -130,6 +137,8 @@ def FunctionEncoder(
                     #print(feature_expr)
                     for feature in feature_expr:
                         #print("features", feature)
+
+                        #Apply the given function, can be as simple or complex as liked
                         if combine_type == "Multiply":
                             result *= relation_function(features[feature], num_params)
                         else:
@@ -172,5 +181,6 @@ def FunctionEncoder(
                 new_operation = operation
             #print(modified_circuit)
             modified_circuit.append(new_operation, qubits, clbits)
-        #print(modified_circuit)
+        
+        #Returns the new circuit
         return modified_circuit
