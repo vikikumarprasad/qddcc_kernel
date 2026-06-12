@@ -3,7 +3,6 @@ import csv
 import joblib
 import json
 import time
-# !{sys.executable} -m pip install qcircuit
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 
@@ -43,15 +42,11 @@ trainable = os.getenv("TRAINABLE").upper()
 basis = os.getenv("BASIS_SET")
 measure = os.getenv("MEASURE")
 top = os.getcwd()
+
 if not date is None:
     input_path = os.path.join(top, rf"{date}/")
 else:
     input_path = top
-
-#with open(input_data, 'rb') as f:
-#    data = joblib.load(f)
-#    train_X = data['X']
-#    train_y = data['y']
 
 if data_format != "Water-Scaled":
     data_path1 = rf"Data/{basis}/{molecule_structure}/scaled/{num_features}_feature_test.bin"
@@ -83,9 +78,10 @@ else:
     model_path += ".bin"
     out_path += ".csv"
 
-#Kernel does not appear to be fully saved when quantum kernel model saved with joblib.
-#So we have to recall fit with the data. This will complete much faster than originally.
-#It's possible this is some weird bug, but I did this to eleimante any possible issues with data
+
+#Loads the data, unscales the data and then rescales relative to water
+#Training data needs to be reloaded as while kernel kept circuit parameters and hyperparameters
+#The models need to be reloaded using the data (this step is very fast unlike initial training)
 molecules = train_molecule.split("-")
 scale = data_format
 total_X_train = np.array([])
@@ -158,16 +154,17 @@ with open(data_path2, 'rb') as f:
     X_test2 = data_file["X"]
     y_test2 = data_file["y"]
 
-#If data not used to train add it to testing to get better picture
-if not molecule_struct in train_molecule:
+
+# Only if not testing your initial training molcule test on all t2 for the transfer target
+if train_molecule != molecule_struct:
     X_test = np.vstack((X_test1, X_test2))
     y_test = np.append(y_test1, y_test2)
 else:
     X_test = X_test1
-    y_test1
+    y_test = y_test1
 
-#Unscaled the data and rescale based on water
 print(X_test.shape, y_test.shape)
+#Scale all data relative to water
 if data_format == "Water-Scaled":
     with open(os.path.join(top, rf"Data/STO-3G/Water/scaled/feature_scaler.bin"), 'rb') as f:
         water_feature_scaler = joblib.load(f)
@@ -177,10 +174,7 @@ if data_format == "Water-Scaled":
         molecule_feature_scaler = joblib.load(f)
     with open(os.path.join(top, rf"Data/STO-3G/{molecule_structure}/scaled/t2_scaler.bin"), 'rb') as f:
         molecule_t2_scaler = joblib.load(f)
-#    with open(os.path.join(top, rf"Data/STO-3G/{train_molecule}/scaled/feature_scaler.bin"), 'rb') as f:
-#        train_feature_scaler = joblib.load(f)
-#    with open(os.path.join(top, rf"Data/STO-3G/{train_molecule}/scaled/t2_scaler.bin"), 'rb') as f:
-#        train_t2_scaler = joblib.load(f)
+
     unscaledX_test = molecule_feature_scaler.inverse_transform(X_test)
     unscaledy_test = molecule_t2_scaler.inverse_transform(y_test.reshape(-1, 1))
 
@@ -193,6 +187,7 @@ if data_format == "Water-Scaled":
 
     X_test = X_test[:, top5]
 
+#reload model
 model.fit(X_train, y_train)
 print(model.get_params())
 predictions = model.predict(X_test)
@@ -203,7 +198,6 @@ print(out_path)
 expected_predicted_path = rf"transferability/{basis}/{train_molecule}/Expected_Predicted.csv"
 #e_p_output = {"Molecule": f"{molecule_structure}" ,"Circuit": f"{circuit_struct}_{degree}_{layers}", "Expected": y_test, "Predicted": predictions}
 
-#Write the R2 score for each molecule
 os.makedirs(f"transferability/{basis}/{train_molecule}", exist_ok=True)
 # Open the file in append mode
 with open(out_path, mode='a', newline='') as file:
@@ -211,25 +205,25 @@ with open(out_path, mode='a', newline='') as file:
     # Append the label and value as a new row
     writer.writerow([molecule_structure, r2])
 
-#OPTIONALLY SAVE T2 VALUES FOR EXPECTED VS PREDICTED GRAPH
-# # Combine the lists into a single list of tuples for easier iteration
-# data_to_write = zip(y_test, predictions)
+# Combine the lists into a single list of tuples for easier iteration
+data_to_write = zip(y_test, predictions)
 
-# with open(expected_predicted_path, mode='a', newline='') as file:
-#     fieldnames = ['Molecule', 'Circuit', 'Expected', 'Predicted']
-#     writer = csv.DictWriter(file, fieldnames=fieldnames)
+# Writes the actual t2 and the predicted t2 into a shared csv.
+with open(expected_predicted_path, mode='a', newline='') as file:
+    fieldnames = ['Molecule', 'Circuit', 'Expected', 'Predicted']
+    writer = csv.DictWriter(file, fieldnames=fieldnames)
 
-#     # Check if the file is empty to write the header
-#     if file.tell() == 0:
-#         writer.writeheader()
+    # Check if the file is empty to write the header
+    if file.tell() == 0:
+        writer.writeheader()
     
-#     # Iterate through the data and write a new row for each pair
-#     for expected_value, predicted_value in data_to_write:
-#         row_output = {
-#             'Molecule': molecule_structure,
-#             'Circuit': f"{circuit_struct}_{degree}_{layers}",
-#             'Expected': expected_value,
-#             'Predicted': predicted_value
-#         }
-#         writer.writerow(row_output)
-#         time.sleep(0.01)
+    # Iterate through the data and write a new row for each pair
+    for expected_value, predicted_value in data_to_write:
+        row_output = {
+            'Molecule': molecule_structure,
+            'Circuit': f"{circuit_struct}_{degree}_{layers}",
+            'Expected': expected_value,
+            'Predicted': predicted_value
+        }
+        writer.writerow(row_output)
+        time.sleep(0.0001)
