@@ -2,7 +2,6 @@ import os
 import joblib
 import json
 import time
-# !{sys.executable} -m pip install qcircuit
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import random
