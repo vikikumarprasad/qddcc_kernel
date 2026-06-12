@@ -3,7 +3,6 @@ import csv
 import joblib
 import json
 import time
-# !{sys.executable} -m pip install qcircuit
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 
@@ -49,19 +48,7 @@ if not date is None:
 else:
     input_path = top
 
-#with open(input_data, 'rb') as f:
-#    data = joblib.load(f)
-#    train_X = data['X']
-#    train_y = data['y']
-# os.mkdir("Blind/")
-#os.mkdir(f"Blind/{train_molecule}")
-# if data_format != "Water-Scaled":
-#     # data_path1 = rf"Blind_Data/{molecule_structure}/scaled/{num_features}_feature_test.bin"
-#     data_path2 = rf"Blind_Data/{molecule_structure}/scaled/{num_features}_feature_train.bin"
-# else:
-#     # data_path1 = rf"Blind_Data/{molecule_structure}/scaled/full_feature_test.bin"
-#     data_path2 = rf"Blind_Data/{molecule_structure}/scaled/full_feature_train.bin"
-
+#Load models
 if model_type != "SVR" and model_type != "KRR" and model_type != "GPR":
     model_path = rf"models/{train_molecule}/{trainable}_{kernel_type}_{hyper_optimized}_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type}"
     out_path = rf"Blind/{train_molecule}/{trainable}_{kernel_type}_{num_features}_{circuit_struct}-{degree}-{layers}-{model_type}"
@@ -82,9 +69,6 @@ else:
         model_path = rf"models/{train_molecule}/{model_type}"
         out_path = rf"Blind/{train_molecule}/{model_type}"
 
-#    if trainable == "FALSE":
-#        model_path += f"-{job_num}"
-#        out_path += f"-{job_num}"
     model_path += ".bin"
     out_path += ".csv"
 
@@ -145,15 +129,10 @@ for molecule_struct in molecules:
 X_train = total_X_train
 y_train = total_y_train
 
-#print(model_path, molecule_structure)
 with open(model_path, 'rb') as f:
     model_file = joblib.load(f)
     model = model_file["Model"]
-# print(data_path1, data_path2)
-# with open(data_path1,'rb') as f:
-#     data_file = joblib.load(f)
-#     X_test1 = data_file["X"]
-#     y_test1 = data_file["y"]
+
 model.fit(X_train, y_train)
 
 test_molecules = ["Benzene", "Chlorine", "Nitrogen", "Ozone", "Pentane", "Pyrazine", "Thioformaldehyde"]
@@ -168,8 +147,7 @@ for molecule_struct in test_molecules:
 
     X_test = X_test2
     y_test = y_test2
-    #X_test = X_test1
-    #y_test = y_test1
+
     print(X_test.shape, y_test.shape)
     if data_format == "Water-Scaled":
         with open(os.path.join(top, rf"Data/STO-3G/Water/scaled/feature_scaler.bin"), 'rb') as f:
@@ -198,21 +176,20 @@ for molecule_struct in test_molecules:
     print(out_path)
     print(predictions.shape)
     expected_predicted_path = rf"Blind/{train_molecule}/Expected_Predicted.csv"
-    #e_p_output = {"Molecule": f"{molecule_struct}" ,"Circuit": f"{circuit_struct}_{degree}_{layers}", "Expected": y_test, "Predicted": predictions}
-    #unscaledX_train = water_feature_scaler.inverse_transform(X_train)
+
     unscaledy_test = water_t2_scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
     unscaledy_predictions = water_t2_scaler.inverse_transform(predictions.reshape(-1, 1)).flatten()
     print(unscaledy_predictions.shape)
     mae = mean_absolute_error(unscaledy_test, unscaledy_predictions)
     print(f"{molecule_struct} MAE: {mae}")
-    #os.makedirs(f"transferability/{basis}/{train_molecule}", exist_ok=True)
+
+
     # Open the file in append mode
     with open(out_path, mode='a', newline='') as file:
         writer = csv.writer(file)
         # Append the label and value as a new row
         writer.writerow([molecule_struct, mae])
 
-    #SAVE THE T2 VALUES SO THAT THE CORRELATION ENERGY CAN BE COMPUTED
     # Combine the lists into a single list of tuples for easier iteration
     data_to_write = zip(unscaledy_test, unscaledy_predictions)
 
