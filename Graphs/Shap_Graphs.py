@@ -37,22 +37,22 @@ for molecule_struct in molecules:
     print(molecule_struct)
     top=os.getcwd()
     if scale != "Water-Scaled":
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
             ddcc_train = joblib.load(f)
 
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/{num_features}_feature_test.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/{num_features}_feature_test.bin','rb') as f:
             ddcc_test = joblib.load(f)
 
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
             ddcc_scaler = joblib.load(f)
     else:
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
             ddcc_train = joblib.load(f)
 
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/full_feature_test.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/full_feature_test.bin','rb') as f:
             ddcc_test = joblib.load(f)
 
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
             ddcc_scaler = joblib.load(f)
 
     # print(ddcc_train.keys())
@@ -64,13 +64,13 @@ for molecule_struct in molecules:
 
     if scale=="Water-Scaled":
         print("Scaling data")
-        with open(rf"Data/{basis}/Water/scaled/feature_scaler.bin", 'rb') as f:
+        with open(rf"data/training/{basis}/Water/scaled/feature_scaler.bin", 'rb') as f:
             water_feature_scaler = joblib.load(f)
-        with open(rf"Data/{basis}/Water/scaled/t2_scaler.bin", 'rb') as f:
+        with open(rf"data/training/{basis}/Water/scaled/t2_scaler.bin", 'rb') as f:
             water_t2_scaler = joblib.load(f)
-        with open(rf"Data/{basis}/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
+        with open(rf"data/training/{basis}/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
             molecule_feature_scaler = joblib.load(f)
-        with open(rf"Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
+        with open(rf"data/training/{basis}/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
             molecule_t2_scaler = joblib.load(f)
         print(water_feature_scaler, water_t2_scaler)
         print(molecule_feature_scaler, molecule_t2_scaler)
@@ -124,17 +124,24 @@ model = RandomForestRegressor(**{'bootstrap': True,
 'n_estimators': 300,
 'n_jobs': -1,
 'oob_score': False,
-'random_state': None,
+'random_state': 42,
 'verbose': 0,
 'warm_start': False}
 )
 
 models={}
-model.fit(X_train, y_train)
-print(model.score(X_train,y_train))
+model.fit(X_train, np.ravel(y_train))
+print(model.score(X_train, np.ravel(y_train)))
 
-# This is costly
-explainer = shap.Explainer(model.predict, np.vstack([X_train,X_test]),n_jobs=-1,feature_names=properties[:-1])
+# Use an interventional background sample to retain the original script's
+# background-data semantics while using the efficient tree implementation.
+background = shap.sample(np.vstack([X_train, X_test]), 100, random_state=42)
+explainer = shap.TreeExplainer(
+    model,
+    data=background,
+    feature_perturbation="interventional",
+    feature_names=properties[:-1],
+)
 shap_values = explainer(X_test)
 
 selected_features = ["t2start", "t2mag", "doublecheck", "orbdiff", "diag"]
@@ -154,7 +161,8 @@ plt.rcParams.update({
     "axes.labelweight": "bold"
 })
 
-output_dir = "heatmaps"
+output_dir = os.getenv("FIGURE_OUTPUT_DIR", "paper_results/regenerated_figures")
+os.makedirs(output_dir, exist_ok=True)
 # -----------------------------
 # 6. Visualizations
 # -----------------------------
@@ -177,5 +185,5 @@ plt.barh([features[i] for i in idx], [vals[i] for i in idx], color="#1e88e5")
 plt.xlabel(r"Mean $\Vert SHAP Value\Vert$")
 
 plt.tight_layout()
-plt.savefig(os.path.join(output_dir, "fixed_shap_summary_bar.png"), dpi=300)
+plt.savefig(os.path.join(output_dir, "ccsd_shap_summary_bar.png"), dpi=300)
 plt.close()

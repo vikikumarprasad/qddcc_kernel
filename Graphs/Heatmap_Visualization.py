@@ -14,8 +14,8 @@ def resize_image(image_path, size=(50, 50)):
         img = Image.open(image_path)
         img = img.resize(size, Image.Resampling.LANCZOS)
         return np.array(img)
-    except:
-        return np.zeros((size[0], size[1], 3))
+    except (FileNotFoundError, OSError):
+        return None
 
 def extract_circuit_parts(circuit_str):
     parts = circuit_str.split('-')
@@ -46,7 +46,7 @@ plt.rcParams.update({'font.size': 16, 'font.weight':'heavy'})
 
 train_molecule = os.getenv("MOLECULE")
 
-data_folder = f'transferability/STO-3G/{train_molecule}'
+data_folder = f'paper_results/transferability/STO-3G/{train_molecule}'
 
 file_names = os.listdir(data_folder)
 data_dict = {}
@@ -71,8 +71,14 @@ for file_name in file_names:
                 data_dict[molecule][model_base].append(float(value))
             except: continue
 
-mean_res = {mol: {m: np.mean(v) for m, v in mods.items()} for mol, mods in data_dict.items()}
-std_res = {mol: {m: np.std(v) for m, v in mods.items()} for mol, mods in data_dict.items()}
+mean_res = {
+    mol: {model: np.mean(values) for model, values in models.items() if values}
+    for mol, models in data_dict.items()
+}
+std_res = {
+    mol: {model: np.std(values) for model, values in models.items() if values}
+    for mol, models in data_dict.items()
+}
 
 order = ["Water", "Methanol", "Ethylene", "Methane", "Ammonia", "Formaldehyde", "Ethane"]
 df_mean = pd.DataFrame.from_dict(mean_res, orient='index').reindex(order).fillna(-9)
@@ -132,10 +138,11 @@ for text in ax.texts:
 for i, label in enumerate(labels):
     image_path = f'images/{label}.png'
     resized_img = resize_image(image_path, size=(50, 50))
-    imagebox = OffsetImage(resized_img, zoom=1)
-    ab = AnnotationBbox(imagebox, (0, i + 0.5), frameon=False, xybox=(-0.1, i + 0.2),
-                        xycoords='data', boxcoords=('axes fraction', 'data'), box_alignment=(0.5, 0.5))
-    ax.add_artist(ab)
+    if resized_img is not None:
+        imagebox = OffsetImage(resized_img, zoom=1)
+        ab = AnnotationBbox(imagebox, (0, i + 0.5), frameon=False, xybox=(-0.1, i + 0.2),
+                            xycoords='data', boxcoords=('axes fraction', 'data'), box_alignment=(0.5, 0.5))
+        ax.add_artist(ab)
     ax.text(-0.25, i + 0.5, label, ha='right', va='center', transform=ax.transData, fontsize=18, fontweight='bold')
 
 # X-Axis Formatting
@@ -153,9 +160,12 @@ ax.set_xticks(center_locations)
 ax.set_xticklabels(column_labels, rotation=45, ha='right')
 
 plt.tight_layout()
-os.makedirs('heatmaps', exist_ok=True)
-plt.savefig(f'heatmaps/pres_{train_molecule}_heatmap.png', dpi=300, bbox_inches='tight')
-print(f"Heatmap generated: heatmaps/{train_molecule}_heatmap.png")
+output_dir = os.getenv("FIGURE_OUTPUT_DIR", "paper_results/regenerated_figures")
+os.makedirs(output_dir, exist_ok=True)
+output_path = os.path.join(output_dir, f"{train_molecule}_heatmap.png")
+plt.savefig(output_path, dpi=300, bbox_inches='tight')
+plt.close()
+print(f"Heatmap generated: {output_path}")
 
 # Produces a latex table
 

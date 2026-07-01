@@ -41,6 +41,8 @@ hyper_optimized = os.getenv("HYPERPARAMETERS")
 trainable = os.getenv("TRAINABLE").upper()
 basis = os.getenv("BASIS_SET")
 measure = os.getenv("MEASURE")
+random_seed = int(os.getenv("RANDOM_SEED", "42"))
+np.random.seed(random_seed)
 top = os.getcwd()
 
 if not date is None:
@@ -49,15 +51,15 @@ else:
     input_path = top
 
 if data_format != "Water-Scaled":
-    data_path1 = rf"Data/{basis}/{molecule_structure}/scaled/{num_features}_feature_test.bin"
-    data_path2 = rf"Data/{basis}/{molecule_structure}/scaled/{num_features}_feature_train.bin"
+    data_path1 = rf"data/training/{basis}/{molecule_structure}/scaled/{num_features}_feature_test.bin"
+    data_path2 = rf"data/training/{basis}/{molecule_structure}/scaled/{num_features}_feature_train.bin"
 else:
-    data_path1 = rf"Data/{basis}/{molecule_structure}/scaled/full_feature_test.bin"
-    data_path2 = rf"Data/{basis}/{molecule_structure}/scaled/full_feature_train.bin"
+    data_path1 = rf"data/training/{basis}/{molecule_structure}/scaled/full_feature_test.bin"
+    data_path2 = rf"data/training/{basis}/{molecule_structure}/scaled/full_feature_train.bin"
 
 if model_type != "SVR" and model_type != "KRR" and model_type != "GPR":
     model_path = rf"models/{train_molecule}/{trainable}_{kernel_type}_{hyper_optimized}_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type}"
-    out_path = rf"transferability/{basis}/{train_molecule}/{trainable}_{kernel_type}_{num_features}_{circuit_struct}-{degree}-{layers}-{model_type}"
+    out_path = rf"paper_results/transferability/{basis}/{train_molecule}/{trainable}_{kernel_type}_{num_features}_{circuit_struct}-{degree}-{layers}-{model_type}"
 
     if trainable == "FALSE":
         model_path += f"-{job_num}"
@@ -70,10 +72,10 @@ if model_type != "SVR" and model_type != "KRR" and model_type != "GPR":
 else:
     if hyper_optimized == "OPTIMIZED":
         model_path = rf"models/{train_molecule}/{hyper_optimized}_{model_type}"
-        out_path = rf"transferability/{basis}/{train_molecule}/{hyper_optimized}_{model_type}"
+        out_path = rf"paper_results/transferability/{basis}/{train_molecule}/{hyper_optimized}_{model_type}"
     else:
         model_path = rf"models/{train_molecule}/{model_type}"
-        out_path = rf"transferability/{basis}/{train_molecule}/{model_type}"
+        out_path = rf"paper_results/transferability/{basis}/{train_molecule}/{model_type}"
 
     model_path += ".bin"
     out_path += ".csv"
@@ -89,16 +91,16 @@ total_y_train = np.array([])
 for molecule_struct in molecules:
     top=os.getcwd()
     if scale != "Water-Scaled":
-        with open(rf'Data/STO-3G/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
+        with open(rf'data/training/STO-3G/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
             ddcc_train = joblib.load(f)
 
-        with open(rf'Data/STO-3G/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+        with open(rf'data/training/STO-3G/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
             ddcc_scaler = joblib.load(f)
     else:
-        with open(rf'Data/STO-3G/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
+        with open(rf'data/training/STO-3G/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
             ddcc_train = joblib.load(f)
 
-        with open(rf'Data/STO-3G/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+        with open(rf'data/training/STO-3G/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
             ddcc_scaler = joblib.load(f)
 
     # print(ddcc_train.keys())
@@ -108,13 +110,13 @@ for molecule_struct in molecules:
 
     if scale=="Water-Scaled":
         print("Scaling data")
-        with open(rf"Data/STO-3G/Water/scaled/feature_scaler.bin", 'rb') as f:
+        with open(rf"data/training/STO-3G/Water/scaled/feature_scaler.bin", 'rb') as f:
             water_feature_scaler = joblib.load(f)
-        with open(rf"Data/STO-3G/Water/scaled/t2_scaler.bin", 'rb') as f:
+        with open(rf"data/training/STO-3G/Water/scaled/t2_scaler.bin", 'rb') as f:
             water_t2_scaler = joblib.load(f)
-        with open(rf"Data/STO-3G/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
+        with open(rf"data/training/STO-3G/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
             molecule_feature_scaler = joblib.load(f)
-        with open(rf"Data/STO-3G/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
+        with open(rf"data/training/STO-3G/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
             molecule_t2_scaler = joblib.load(f)
         print(water_feature_scaler, water_t2_scaler)
         print(molecule_feature_scaler, molecule_t2_scaler)
@@ -166,13 +168,13 @@ else:
 print(X_test.shape, y_test.shape)
 #Scale all data relative to water
 if data_format == "Water-Scaled":
-    with open(os.path.join(top, rf"Data/STO-3G/Water/scaled/feature_scaler.bin"), 'rb') as f:
+    with open(os.path.join(top, rf"data/training/STO-3G/Water/scaled/feature_scaler.bin"), 'rb') as f:
         water_feature_scaler = joblib.load(f)
-    with open(os.path.join(top, rf"Data/STO-3G/Water/scaled/t2_scaler.bin"), 'rb') as f:
+    with open(os.path.join(top, rf"data/training/STO-3G/Water/scaled/t2_scaler.bin"), 'rb') as f:
         water_t2_scaler = joblib.load(f)
-    with open(os.path.join(top, rf"Data/STO-3G/{molecule_structure}/scaled/feature_scaler.bin"), 'rb') as f:
+    with open(os.path.join(top, rf"data/training/STO-3G/{molecule_structure}/scaled/feature_scaler.bin"), 'rb') as f:
         molecule_feature_scaler = joblib.load(f)
-    with open(os.path.join(top, rf"Data/STO-3G/{molecule_structure}/scaled/t2_scaler.bin"), 'rb') as f:
+    with open(os.path.join(top, rf"data/training/STO-3G/{molecule_structure}/scaled/t2_scaler.bin"), 'rb') as f:
         molecule_t2_scaler = joblib.load(f)
 
     unscaledX_test = molecule_feature_scaler.inverse_transform(X_test)
@@ -195,10 +197,10 @@ r2 = r2_score(y_test.flatten(), predictions.flatten())
 print(f"{molecule_structure} R2: {r2}")
 print(out_path)
 
-expected_predicted_path = rf"transferability/{basis}/{train_molecule}/Expected_Predicted.csv"
+expected_predicted_path = rf"paper_results/transferability/{basis}/{train_molecule}/Expected_Predicted.csv"
 #e_p_output = {"Molecule": f"{molecule_structure}" ,"Circuit": f"{circuit_struct}_{degree}_{layers}", "Expected": y_test, "Predicted": predictions}
 
-os.makedirs(f"transferability/{basis}/{train_molecule}", exist_ok=True)
+os.makedirs(f"paper_results/transferability/{basis}/{train_molecule}", exist_ok=True)
 # Open the file in append mode
 with open(out_path, mode='a', newline='') as file:
     writer = csv.writer(file)

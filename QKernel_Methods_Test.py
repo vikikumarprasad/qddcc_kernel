@@ -51,14 +51,19 @@ data_format = os.getenv("DATA_SETUP")
 date = os.getenv("RUN_DATE")
 hyper_optimized = os.getenv("HYPERPARAMETERS")
 num_qubits = int(os.getenv("NUM_QUBITS"))
-job_num = os.getenv("JOB_NUM")
+job_num = os.getenv("JOB_NUM", "0")
 trainable = os.getenv("TRAINABLE")
-basis = os.getenv("BASIS")
+basis = os.getenv("BASIS") or os.getenv("BASIS_SET", "STO-3G")
 scale = "Water-Scaled"
 measure = os.getenv("MEASURE")
 percent_data = float(os.getenv("PERCENT"))
+if not 0 < percent_data <= 1:
+    raise ValueError("PERCENT must be greater than 0 and at most 1")
+random_seed = int(os.getenv("RANDOM_SEED", "42"))
+random.seed(random_seed)
+np.random.seed(random_seed)
 print("Qiksit Version: ",qiskit.__version__)
-#random.seed(42)
+print("Random seed: ", random_seed)
 
 def learning_rate(iteration, transition_begin = 0, transition_steps = 450, init_value = 0.08, decay_rate = 0.1):
     rate_factor = ((iteration - transition_begin) / transition_steps)
@@ -156,8 +161,13 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
     elif circuit_struct == "MultiControl":
         encoding_scheme = MultiControlEncodingCircuit(num_features, num_qubits, layers)
         encoding_circuit = encoding_scheme.get_circuit(ParameterVector("X",num_features),ParameterVector("P",encoding_scheme.num_parameters))
+    elif circuit_struct in {"CP_map", "CPMap"}:
+        raise NotImplementedError(
+            "CPMap is not distributed with this repository. Its implementation "
+            "is available only by request from the original CPMap author."
+        )
     else:
-        print("Not valid encoder")
+        raise ValueError(f"Unsupported encoding circuit: {circuit_struct!r}")
     if isinstance(degree, int):
         if degree > 0:
             function_encoded_circuit = FunctionEncoder(encoding_circuit, degree_relation_function, False)
@@ -175,17 +185,23 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
     if kernel_type == "Projected":
         kernel = ProjectedQuantumKernel(
             encoding_circuit,
-            executor=Executor("qasm_simulator", shots=1024), 
+            executor=Executor("qasm_simulator", shots=1024, seed=random_seed),
             measurement=measure
         )
     elif kernel_type == "Fidelity": #NOT USED
-        kernel = FidelityKernel(encoding_circuit, executor=Executor(Aer.get_backend("aer_simulator"), shots=1024))
+        kernel = FidelityKernel(
+            encoding_circuit,
+            executor=Executor(
+                Aer.get_backend("aer_simulator"),
+                shots=1024,
+                seed=random_seed,
+            ),
+        )
 
     if date != "" and not date is None:
         start_path = f"models/{date}/{molecule_structure}"
     else:
         start_path = f"models/{molecule_structure}"
-    start_path = start_path + f"/{trainable.upper()}_{kernel_type.upper()}_{basis}_"
     # set up the optimizer
     # adam_opt = Adam(options={"maxiter":1, "lr": learning_rate, "tol":0.001})
 
@@ -213,34 +229,33 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
     print("Starting training of model")
     start_time = time.time()
     if hyper_optimized == "OPTIMIZED":
-        model.fit(X_train, y_train)
-            # Extract all the lists of options from the dictionary's values
-        all_options_lists = []
-        print("Processing dictionary:")
-        for key, options in param_grid.items():
-            if not isinstance(options, list):
-                raise ValueError(f"Value for key '{key}' must be a list of options.")
-            print(f"  Key: '{key}', Options: {options}")
-            all_options_lists.append(options)
-
-        print("\nGenerating hyperparameters combinations...")
-        parameter_pipeline = Pipeline(("estimator", model))
-        grid_search = GridSearchCV(parameter_pipeline, param_grid, scoring="r2")
-        grid_search.fit(X_train.reshape(-1, 1), y_train)
-
-        #Print optimal hyper parameters
+        grid_search = GridSearchCV(
+            model,
+            param_grid,
+            cv=5,
+            scoring="r2",
+            verbose=1,
+        )
+        grid_search.fit(X_train, y_train)
         print(grid_search.best_params_)
         print(f"Model Train R2: {grid_search.best_score_}")
         model = grid_search.best_estimator_
-
-        log_path = start_path + f"_{hyper_optimized}_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type.upper()}_{percent_data}"
+        model_name = (
+            f"{trainable.upper()}_{kernel_type.upper()}_{hyper_optimized}_"
+            f"{num_features}_{circuit_struct}_{degree}_{layers}_{model_type.upper()}"
+        )
     else:
         model.fit(X_train, y_train)
-        log_path = start_path + f"_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type.upper()}_{percent_data}"
+        model_name = (
+            f"{trainable.upper()}_{kernel_type.upper()}_{hyper_optimized}_"
+            f"{num_features}_{circuit_struct}_{degree}_{layers}_{model_type.upper()}"
+        )
     end_time = time.time()
-    if not job_num is None:
-        log_path = log_path + f"-{job_num}"
-    log_path = log_path + f"_{measure}.bin"
+    if trainable.upper() == "FALSE":
+        model_name += f"-{job_num}"
+    if measure:
+        model_name += f"_{measure}"
+    log_path = f"{start_path}/{model_name}.bin"
     print(log_path)
 
     print(f"Fitting the model took {end_time-start_time} seconds")
@@ -258,14 +273,14 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
     else:
         progress = progress = {"Training Time": end_time-start_time, "R2 Score":r2_score(y_test.flatten(), predictions.flatten()), "Model":model}
     joblib.dump(progress, log_path)
-    path = f"{percent_data}-{num_features}-{basis}-{molecule_structure}-R2.csv"
+    path = f"paper_results/training_scores/{percent_data}-{num_features}-{basis}-{molecule_structure}-R2.csv"
     output = [f"{trainable}-{model_type}", f"{circuit_struct}-{str(degree).upper()}-{layers}-{job_num}", r2_score(y_test.flatten(), predictions.flatten())]
     # Open the file in append mode
     with open(path, mode='a', newline='') as file:
         writer = csv.writer(file)
         # Append the label and value as a new row
         writer.writerow(output)
-    water_t2_path = "Water_Energy/" + path
+    water_t2_path = f"paper_results/water_energy/{os.path.basename(path)}"
 
     unscaledy_test = water_t2_scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
     unscaledy_predictions = water_t2_scaler.inverse_transform(predictions.reshape(-1, 1)).flatten()
@@ -346,13 +361,13 @@ def classical_kernel_method(model_type):
 
     progress = {"Training Time": end_time-start_time, "R2 Score":r2_score(y_test.flatten(), predictions.flatten()), "Model":model}
     joblib.dump(progress, log_path)
-    path = f"{percent_data}-{num_features}-{basis}-{molecule_structure}-R2.csv"
+    path = f"paper_results/training_scores/{percent_data}-{num_features}-{basis}-{molecule_structure}-R2.csv"
     output = [f"", f"Classical-{model_type}", r2_score(y_test.flatten(), predictions.flatten())]
     with open(path, mode='a', newline='') as file:
         writer = csv.writer(file)
         # Append the label and value as a new row
         writer.writerow(output)
-    water_t2_path = "Water_Energy/" + path
+    water_t2_path = f"paper_results/water_energy/{os.path.basename(path)}"
 
     unscaledy_test = water_t2_scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
     unscaledy_predictions = water_t2_scaler.inverse_transform(predictions.reshape(-1, 1)).flatten()
@@ -393,22 +408,22 @@ total_y_train = np.array([])
 for molecule_struct in molecules:
     top=os.getcwd()
     if scale != "Water-Scaled":
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
             ddcc_train = joblib.load(f)
 
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/{num_features}_feature_test.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/{num_features}_feature_test.bin','rb') as f:
             ddcc_test = joblib.load(f)
 
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
             ddcc_scaler = joblib.load(f)
     else:
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
             ddcc_train = joblib.load(f)
 
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/full_feature_test.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/full_feature_test.bin','rb') as f:
             ddcc_test = joblib.load(f)
 
-        with open(rf'Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+        with open(rf'data/training/{basis}/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
             ddcc_scaler = joblib.load(f)
 
     # print(ddcc_train.keys())
@@ -421,21 +436,25 @@ for molecule_struct in molecules:
     # Scale all data to the same range (Data was generated by molecule so ranges differ)
     if scale=="Water-Scaled":
         print("Scaling data")
-        with open(rf"Data/{basis}/Water/scaled/feature_scaler.bin", 'rb') as f:
+        with open(rf"data/training/{basis}/Water/scaled/feature_scaler.bin", 'rb') as f:
             water_feature_scaler = joblib.load(f)
-        with open(rf"Data/{basis}/Water/scaled/t2_scaler.bin", 'rb') as f:
+        with open(rf"data/training/{basis}/Water/scaled/t2_scaler.bin", 'rb') as f:
             water_t2_scaler = joblib.load(f)
-        with open(rf"Data/{basis}/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
+        with open(rf"data/training/{basis}/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
             molecule_feature_scaler = joblib.load(f)
-        with open(rf"Data/{basis}/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
+        with open(rf"data/training/{basis}/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
             molecule_t2_scaler = joblib.load(f)
         print(water_feature_scaler, water_t2_scaler)
         print(molecule_feature_scaler, molecule_t2_scaler)
         unscaledX_train = molecule_feature_scaler.inverse_transform(X_train)
         unscaledy_train = molecule_t2_scaler.inverse_transform(y_train.reshape(-1, 1))
 
-        # electron_correlation_selection  or probability_selection_scheme
-        # unscaledX_train, unscaledy_train = probability_selection_scheme(unscaledX_train, unscaledy_train, percent_data)
+        if percent_data < 1:
+            unscaledX_train, unscaledy_train = probability_selection_scheme(
+                unscaledX_train,
+                unscaledy_train,
+                percent_data,
+            )
 
         X_train = np.array(water_feature_scaler.transform(unscaledX_train))
         y_train = np.array(water_t2_scaler.transform(unscaledy_train).flatten())
@@ -488,6 +507,8 @@ if date != "" and not date is None:
     os.makedirs(f"models/{date}/{molecule_structure}", exist_ok=True)
 else:
     os.makedirs(f"models/{molecule_structure}", exist_ok=True)
+os.makedirs("paper_results/training_scores", exist_ok=True)
+os.makedirs("paper_results/water_energy", exist_ok=True)
 
 if model_type == "QNN":
      pass

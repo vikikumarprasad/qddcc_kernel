@@ -19,6 +19,15 @@ import joblib
 import time
 from shutil import copy
 import numpy as np
+
+# Compatibility for supplied pandas pickles created with NumPy 2.
+if int(np.__version__.split(".", 1)[0]) < 2:
+    import numpy.core.multiarray as _numpy_multiarray
+    import numpy.core.numeric as _numpy_numeric
+
+    sys.modules.setdefault("numpy._core.multiarray", _numpy_multiarray)
+    sys.modules.setdefault("numpy._core.numeric", _numpy_numeric)
+
 import pandas as pd
 import os
 import io
@@ -91,9 +100,9 @@ for num_features in feature_distr:
         written_mp2_conv = False
         # print(percent)
         try:
-            # large_data_partial = read_valid_csv(f"Water_Energy/{percent}-{num_features}-{basis}-Water-R2.csv")
+            # large_data_partial = read_valid_csv(f"paper_results/water_energy/{percent}-{num_features}-{basis}-Water-R2.csv")
             large_data_partial = pd.read_csv(
-                f"Water_Energy/{percent}-{num_features}-{basis}-Water-R2.csv", 
+                f"paper_results/water_energy/{percent}-{num_features}-{basis}-Water-R2.csv",
                 chunksize=chunk_size, 
                 header=0, # Assuming first row is header
                 on_bad_lines='skip', # This is the key fix for the ParserError
@@ -159,7 +168,7 @@ for num_features in feature_distr:
 
                     availablememory = 6 # psutil.virtual_memory().available / (1024.0 ** 3)
                     threads_count = int(psutil.cpu_count() * 0.75)
-                    data_path = f"ddcc-voglab2019/water/{molecule_file.lower()}.xyz"
+                    data_path = f"data/geometries/training/water/{molecule_file.lower()}.xyz"
                     with open(data_path,'r') as f:
                         text=f.read()
 
@@ -188,8 +197,8 @@ for num_features in feature_distr:
                     scf_e, scf_wfn = psi4.energy('scf', return_wfn=True)
                     print(rhf_e, scf_e)
 
-                    t1_path = os.path.join(f"Data/{basis}/Water/pickle/t1_" + str(molecule_file) + "_alldata" + ".pkl.gz")
-                    t2_path = os.path.join(f"Data/{basis}/Water/pickle/" + str(molecule_file.lower()) + "_alldata" + ".pkl.gz")
+                    t1_path = os.path.join(f"data/training/{basis}/Water/pickle/t1_" + str(molecule_file) + "_alldata" + ".pkl.gz")
+                    t2_path = os.path.join(f"data/training/{basis}/Water/pickle/" + str(molecule_file.lower()) + "_alldata" + ".pkl.gz")
                     # t2_path = os.path.join(out_path + "pickle/" + molecule_file + "_alldata" + ".pkl.gz")
 
                     mp2_data = pd.read_pickle(t2_path)["t2start"].to_numpy()
@@ -238,7 +247,7 @@ for num_features in feature_distr:
                     print(rf"DDCC {circuit} Delta E = {t2_eng - ml_eng:.3e}")
 
                     if not iterate:
-                        out_path = f"Energy_CSV/{basis}_{num_features}_Energy_Convergence.csv"
+                        out_path = f"paper_results/energy/{basis}_{num_features}_Energy_Convergence.csv"
                         if not written_mp2_conv:
                             written_mp2_conv = True
                             with open(out_path, mode='a', newline='') as file:
@@ -303,7 +312,7 @@ for num_features in feature_distr:
                 ml_mean_abs_error = mean_absolute_error(energy_deviences[:, 0], energy_deviences[:, 1])
                 print(f"{percent}-{circuit} MAE: {ml_mean_abs_error:.3e}")
 
-                out_path = f"Energy_CSV/{basis}_{num_features}_Water_Energy_and_MAE_Data.csv"
+                out_path = f"paper_results/energy/{basis}_{num_features}_Water_Energy_and_MAE_Data.csv"
                 if not written_mp2:
                     written_mp2 = True
                     mp2_mean_abs_error =  mean_absolute_error(energy_deviences[:, 0], energy_deviences[:, 2])

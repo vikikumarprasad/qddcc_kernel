@@ -14,28 +14,62 @@ conda env create -f environment.yml
 conda activate qddcc_kernel
 ```
 
-## Data Layout
+## Data and results from Zenodo
 
-Run scripts from the repository root. The data files are not stored in this
-repository, but the scripts expect joblib `.bin` files in this shape:
+The large files are packaged separately from the source repository.
 
-```text
-Data/<BASIS_SET>/<MOLECULE>/scaled/
-  full_feature_train.bin
-  full_feature_test.bin
-  <NUM_FEATURES>_feature_train.bin
-  <NUM_FEATURES>_feature_test.bin
-  feature_scaler.bin
-  t2_scaler.bin
+**Zenodo record:** pending upload. Add the record DOI/link here after the two
+archives and `SHA256SUMS` have been uploaded.
 
-Blind_Data/<MOLECULE>/scaled/
-  full_feature_train.bin
-  feature_scaler.bin
-  t2_scaler.bin
+| Archive | Download | Extracted | Contents |
+| --- | ---: | ---: | --- |
+| `qddcc_data_v1.tar.zst` | 6.2 GB | 20 GB | Repaired, ready-to-use `data/` required by the project scripts |
+| `qddcc_paper_results_v1.tar.zst` | 4.3 GB | 16 GB | `paper_results/` and generated molecule `images/` |
+
+Download both archives from the Zenodo record into the root of this repository. 
+Verify them before extraction:
+
+```bash
+sha256sum --check SHA256SUMS
 ```
 
-Training and evaluation outputs are written under `models/`, `transferability/`,
-`Blind/`, and CSV result files in the project root.
+Create and activate the Conda environment first if your system does not
+already provide `zstd`, then extract the archives from the repository root:
+
+```bash
+tar --zstd -xf qddcc_data_v1.tar.zst
+tar --zstd -xf qddcc_paper_results_v1.tar.zst
+```
+
+After extraction, the code can use `data/`, `paper_results/`, and `images/`
+directly; no paths need to be edited. The results archive alone is enough to
+inspect the supplied and regenerated figures. Download the data archive as
+well to train models or rerun figure scripts that read the dataset.
+
+## Data Layout
+
+Run scripts from the repository root.
+
+```text
+data/
+  geometries/
+    training/<MOLECULE>/*.xyz
+    blind/<MOLECULE>.xyz
+  training/<BASIS_SET>/<MOLECULE>/
+    output/
+    pickle/
+    scaled/
+      full_feature_{train,test}.bin
+      {5,10,15}_feature_{train,test}.bin
+      feature_scaler.bin
+      t2_scaler.bin
+  blind/<MOLECULE>/
+    output/
+    pickle/
+    scaled/
+```
+
+Training models are written under `models/`.
 
 ## Script Order
 
@@ -58,16 +92,33 @@ Training and evaluation outputs are written under `models/`, `transferability/`,
 4. `Transferability_Test.py`
 
    Run after training. It reloads a saved model, refits the kernel object on the
-   original training molecule data, evaluates one target molecule from `Data/`,
-   and appends the score under `transferability/<BASIS_SET>/<MOLECULE>/`.
+   original training molecule data, evaluates one target molecule from
+   `data/training/`, and appends the score under
+   `paper_results/transferability/<BASIS_SET>/<MOLECULE>/`.
 
 5. `Test_Blind.py`
 
    Run after training when blind data is available. It reloads a saved model,
    refits on the training molecule data, evaluates the hard-coded molecules in
-   `Blind_Data/`, and appends MAE values under `Blind/<MOLECULE>/`.
+   `data/blind/`, and appends MAE values under
+   `paper_results/blind/<MOLECULE>/`.
 
-## Training
+## Reproducing comparable results
+
+We do not need the original saved models or exact paper jobs to run a useful
+reproduction. The prepared data use the recovered paper splits, and
+`RANDOM_SEED` controls data subsampling, initial circuit parameters, and
+simulator sampling. Use the same `RANDOM_SEED` and `JOB_NUM` for training and
+evaluation.
+
+A sensible starting point is five repetitions with seeds and job numbers
+`0` through `4`, using STO-3G, five features, `PERCENT=1.0`, a projected
+kernel, and the circuit/model settings being compared. For each repetition:
+
+1. Run `QKernel_Methods_Test.py` once to train and save the model.
+2. Run `Transferability_Test.py` once for each target `STRUCTURE`.
+3. Run `Test_Blind.py` once if blind-set results are needed.
+4. Regenerate the figures after the result CSVs have been written.
 
 The scripts are configured with environment variables. This example trains a
 projected quantum support-vector regressor on water-scaled data:
@@ -82,11 +133,14 @@ NUM_FEATURES=5 \
 QKERNEL=Projected \
 DATA_SETUP=Water-Scaled \
 RUN_DATE= \
+JOB_NUM=0 \
 HYPERPARAMETERS=OPTIMIZED \
 NUM_QUBITS=5 \
 TRAINABLE=False \
+BASIS_SET=STO-3G \
 MEASURE=XYZ \
 PERCENT=1.0 \
+RANDOM_SEED=0 \
 python QKernel_Methods_Test.py
 ```
 
@@ -104,9 +158,10 @@ Useful values:
   `Z`.
 - `PERCENT`: fraction of each molecule's training set to sample, for example
   `1.0` for all rows or `0.25` for 25 percent.
+- `RANDOM_SEED`: controls subsampling, initial circuit parameters, and
+  simulator sampling. Pair it with the same `JOB_NUM` for each repetition.
 
-`QKernel_Methods_Test.py` currently assumes `Water-Scaled` processing and uses
-`STO-3G` internally for the training basis.
+`QKernel_Methods_Test.py` currently assumes `Water-Scaled` processing.
 
 ## Transferability Evaluation
 
@@ -129,6 +184,7 @@ HYPERPARAMETERS=OPTIMIZED \
 TRAINABLE=False \
 BASIS_SET=STO-3G \
 MEASURE=XYZ \
+RANDOM_SEED=0 \
 python Transferability_Test.py
 ```
 
@@ -156,8 +212,46 @@ HYPERPARAMETERS=OPTIMIZED \
 TRAINABLE=False \
 BASIS_SET=STO-3G \
 MEASURE=XYZ \
+RANDOM_SEED=0 \
 python Test_Blind.py
 ```
 
-The blind script writes `Blind/<MOLECULE>/Expected_Predicted.csv` and appends
+The blind script writes
+`paper_results/blind/<MOLECULE>/Expected_Predicted.csv` and appends
 per-molecule MAE results to the configured blind output CSV.
+
+## Data generation and figures
+
+`Data Generation/Create_Dataset.py` is the pickle-to-joblib preprocessing
+stage. It accepts `BASIS`, `STRUCTURE`, and `NUM_FILES`, and reuses the
+recovered split under `data/splits/` by default. It refuses to create a new
+split unless `RANDOM_SEED` is explicitly supplied for a new experiment.
+
+After creating or updating the environment, regenerate every figure currently
+supported by the preserved evidence with:
+
+```bash
+python Graphs/regenerate_available_figures.py
+```
+
+The command writes 21 PNG files under
+`paper_results/regenerated_figures/`. It includes heatmaps,
+expected/predicted panels, the training and blind-energy plots, reconstructed
+STO-3G and cc-pVDZ R²/energy panels, molecule assets, and a reconstructed
+circuit montage. The latter marks CPMap as unavailable because that source
+implementation is missing.
+
+The published SHAP ranking cannot be reproduced from the recovered model
+state. A replacement analysis is therefore excluded by default and can only
+be requested explicitly:
+
+```bash
+python Graphs/regenerate_available_figures.py --include-recomputed-shap
+```
+
+That output is a new deterministic computation, not the published SHAP
+figure. `Water_R2_score.png` and `Express_entg.png` also remain unsupported
+because their complete source values are absent. 
+
+The earlier XYZ-to-pickle and energy scripts depend on the missing
+`helper_CC_ML_spacial.py`.
