@@ -9,3 +9,12 @@ acs-main.bib
 *.out
 *.synctex.gz
 __pycache__/
+latex/
+
+# Large datasets/results are distributed through Zenodo.
+data/
+original_data/
+paper_results/
+images/
+archive/
+*.tar.zst

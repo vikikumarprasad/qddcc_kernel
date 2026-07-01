@@ -236,4 +236,9 @@ def plot_custom_layout(csv_file_path, scaler_file_path, selected_molecule):
     plt.savefig(f"Transferability_{selected_molecule}_Layout.png", dpi=300, bbox_inches='tight')
     plt.show()
 
-plot_custom_layout("Form_Expected_Predicted.csv", "Data/STO-3G/Water/scaled/t2_scaler.bin", "Formaldehyde")
+source_path = "paper_results/transferability/STO-3G/Formaldehyde/Expected_Predicted.csv"
+plot_custom_layout(
+    source_path,
+    "data/training/STO-3G/Water/scaled/t2_scaler.bin",
+    "Formaldehyde",
+)

@@ -1,12 +1,13 @@
 import pandas as pd
 import io
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 plt.rcParams['font.size'] = 13
 
-df = pd.read_csv("Blind_Energy_MAE_Data.csv")
+df = pd.read_csv("paper_results/blind/Energy_MAE_Data.csv")
 
 # Get unique molecules and circuits
 molecules = ["Pyrazine", "Benzene", "Pentane", "Nitrogen", "Chlorine", "Ozone", "Thioformaldehyde"]
@@ -68,6 +69,10 @@ fig.suptitle("", y=1.05)
 plt.tight_layout()
 
 # Save the plot
-plt.savefig('Energy_Deviance_Legend_Only.png')
+output_dir = os.getenv("FIGURE_OUTPUT_DIR", "paper_results/regenerated_figures")
+os.makedirs(output_dir, exist_ok=True)
+output_path = os.path.join(output_dir, "Water-Formaldehyde_Energy_Deviance_Legend_Only.png")
+plt.savefig(output_path, dpi=300)
+plt.close()
 
-print("Graph with legend only saved as Energy_Deviance_Legend_Only.png")
+print(f"Graph with legend saved as {output_path}")
