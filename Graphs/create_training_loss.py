@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-def visualize_training_results(csv_file="training_results.csv"):
+def visualize_training_results(csv_file="paper_results/training/training_results.csv"):
     if not os.path.exists(csv_file):
         print(f"Error: {csv_file} not found. Please ensure the CSV exists.")
         return
@@ -63,9 +63,12 @@ def visualize_training_results(csv_file="training_results.csv"):
     ax2.legend()
 
     plt.tight_layout()
-    plt.savefig('heatmaps/training_visualization.png', dpi=300)
-    print("Visualization saved as 'training_visualization.png'")
-    plt.show()
+    output_dir = os.getenv("FIGURE_OUTPUT_DIR", "paper_results/regenerated_figures")
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "training_visualization.png")
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    print(f"Visualization saved as '{output_path}'")
 
 if __name__ == "__main__":
     visualize_training_results()

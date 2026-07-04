@@ -28,7 +28,16 @@ def js_divergence(p, q):
     m = 0.5 * (p + q)
     return 0.5 * rel_entr(p, m).sum() + 0.5 * rel_entr(q, m).sum()
 
-def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, long_df, molecule_name):
+def plot_molecule_data(
+    ax_scatter,
+    ax_hist_top,
+    ax_hist_right,
+    ax_img,
+    avg_df,
+    long_df,
+    molecule_name,
+    circuit_order,
+):
     """
     Plots a scatter plot of the data along side the distributions of that data
     """
@@ -37,9 +46,9 @@ def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, l
         ax_img.axis('off')
         return
 
-    circuit_order = ["Hubregtsen (L=1)", "Classical SVR"][::-1] #Keeps a consistent order
-
     #Load the required data
+    avg_df = avg_df.copy()
+    long_df = long_df.copy()
     avg_df['Circuit'] = pd.Categorical(avg_df['Circuit'], categories=circuit_order, ordered=True)
     long_df['Circuit'] = pd.Categorical(long_df['Circuit'], categories=circuit_order, ordered=True)
 
@@ -48,7 +57,7 @@ def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, l
     long_df = long_df.sort_values(by=['Expected_value_unscaled'])
 
     # Scatter
-    for circuit_name, circuit_group in avg_df.groupby('Circuit'):
+    for circuit_name, circuit_group in avg_df.groupby('Circuit', observed=True):
         sns.scatterplot(x='predicted_value_mean', y='expected_value_mean',
                         data=circuit_group, ax=ax_scatter, legend=False, alpha=0.9)
 
@@ -77,7 +86,7 @@ def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, l
     # Metrics
 
     text_base_y = 0.95
-    for j, (circuit_name, _) in enumerate(avg_df.groupby('Circuit')):
+    for j, (circuit_name, _) in enumerate(avg_df.groupby('Circuit', observed=True)):
         current_long_df = long_df[long_df['Circuit'] == circuit_name]
         if current_long_df.shape[0] < 2:
             continue
@@ -100,8 +109,16 @@ def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, l
         ax_scatter.text(0.05, y_position, f'{circuit_name}:\n $R^2$ = {r2:.2f}', transform=ax_scatter.transAxes, fontsize=size, verticalalignment='top', fontweight="bold")
         # ax_scatter.text(0.15, y_position, f'', transform=ax_scatter.transAxes, fontsize=size, verticalalignment='top', fontweight="bold")
 
+    density_df = pd.concat(
+        [
+            group.sample(min(len(group), 100_000), random_state=42)
+            for _, group in long_df.groupby("Circuit", observed=True)
+        ],
+        ignore_index=True,
+    )
+
     try:
-        kde_expected = sns.kdeplot(data=long_df, x='Predicted_value_unscaled', ax=ax_hist_top)
+        kde_expected = sns.kdeplot(data=density_df, x='Predicted_value_unscaled', ax=ax_hist_top)
         kde_expected_line = kde_expected.get_lines()[0]
         kde_expected_data = kde_expected_line.get_ydata()
         max_density_expected = kde_expected_data.max()
@@ -110,7 +127,7 @@ def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, l
     ax_hist_top.cla()
 
     try:
-        kde_predicted = sns.kdeplot(data=long_df, y='Expected_value_unscaled', ax=ax_hist_right)
+        kde_predicted = sns.kdeplot(data=density_df, y='Expected_value_unscaled', ax=ax_hist_right)
         kde_predicted_line = kde_predicted.get_lines()[0]
         kde_predicted_data = kde_predicted_line.get_xdata()
         max_density_predicted = kde_predicted_data.max()
@@ -123,10 +140,10 @@ def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, l
     if ylim_max < 0.5:
         ylim_max = 0.5
 
-    sns.kdeplot(data=long_df, y='Expected_value_unscaled', ax=ax_hist_right, color='skyblue', fill=True, alpha=0.6, label='Expected')
+    sns.kdeplot(data=density_df, y='Expected_value_unscaled', ax=ax_hist_right, color='skyblue', fill=True, alpha=0.6, label='Expected')
 
     # per-circuit distributions on top histogram
-    for circuit_name, circuit_group in long_df.groupby('Circuit'):
+    for circuit_name, circuit_group in density_df.groupby('Circuit', observed=True):
         try:
             sns.kdeplot(data=circuit_group, x='Predicted_value_unscaled', ax=ax_hist_top,
                         clip=ax_scatter.get_xlim(), alpha=0.6, fill=True, label=circuit_name)
@@ -135,7 +152,7 @@ def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, l
 
     # overlay the overall expected distribution as a thin black line
     try:
-        sns.kdeplot(data=long_df, x='Expected_value_unscaled', ax=ax_hist_top, color='black', fill=False, alpha=0.6, clip=ax_scatter.get_xlim())
+        sns.kdeplot(data=density_df, x='Expected_value_unscaled', ax=ax_hist_top, color='black', fill=False, alpha=0.6, clip=ax_scatter.get_xlim())
 
     except Exception:
         pass
@@ -165,34 +182,48 @@ def plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, avg_df, l
 
 
 
-def plot_4x4_molecules(csv_file_path, scaler_file_path):
+def plot_4x4_molecules(csv_file_path, scaler_file_path, training_set, output_dir):
     # load data & scaler
-    df = pd.read_csv(csv_file_path)
+    df = pd.read_csv(
+        csv_file_path,
+        dtype={
+            "Molecule": "category",
+            "Circuit": "category",
+            "Expected": "float32",
+            "Predicted": "float32",
+        },
+        on_bad_lines="skip",
+    )
     scaler = joblib.load(scaler_file_path)
-
-    df = df.explode(['Expected', 'Predicted'])
-    df['Expected_value'] = pd.to_numeric(df['Expected'])
-    df['Predicted_value'] = pd.to_numeric(df['Predicted'])
+    quantum_circuit = "MultiControl_0_1" if training_set == "Water-Formaldehyde" else "Hubregtsen_0_1"
+    df = df[df["Circuit"].isin(["Classical_0_1", quantum_circuit])].copy()
+    if df.empty:
+        raise ValueError(
+            f"No Classical_0_1 or {quantum_circuit} rows found in {csv_file_path}"
+        )
 
     # unscale using scaler
-    df['Predicted_value_unscaled'] = scaler.inverse_transform(df[['Predicted_value']])
-    df['Expected_value_unscaled'] = scaler.inverse_transform(df[['Expected_value']])
+    df['Predicted_value_unscaled'] = scaler.inverse_transform(df[['Predicted']]).ravel()
+    df['Expected_value_unscaled'] = scaler.inverse_transform(df[['Expected']]).ravel()
 
     n_bins = 3000
     df['Expected_value_bin'] = pd.qcut(df['Expected_value_unscaled'], q=n_bins, labels=False, duplicates='drop')
 
-    avg_df = df.groupby(['Molecule', 'Circuit', 'Expected_value_bin']).agg(
+    avg_df = df.groupby(['Molecule', 'Circuit', 'Expected_value_bin'], observed=True).agg(
         expected_value_mean=('Expected_value_unscaled', 'mean'),
         predicted_value_mean=('Predicted_value_unscaled', 'mean')
     ).reset_index()
 
+    quantum_name = "MultiControl (L=1)" if training_set == "Water-Formaldehyde" else "Hubregtsen (L=1)"
     rename_dict = {
         'MultiControl_0_1': 'MultiControl (L=1)',
         'Classical_0_1': 'Classical SVR',
         'Hubregtsen_0_1': 'Hubregtsen (L=1)'
     }
-    avg_df['Circuit'] = avg_df['Circuit'].replace(rename_dict)
-    df['Circuit'] = df['Circuit'].replace(rename_dict)
+    avg_df['Circuit'] = avg_df['Circuit'].astype(str).replace(rename_dict)
+    df['Circuit'] = df['Circuit'].astype(str).replace(rename_dict)
+    circuit_order = ["Classical SVR", quantum_name]
+    os.makedirs(output_dir, exist_ok=True)
 
     molecules = ["Formaldehyde", "Water", "Ethylene", "Ammonia"]
 
@@ -208,12 +239,22 @@ def plot_4x4_molecules(csv_file_path, scaler_file_path):
         ax_img = fig.add_subplot(gs_sub[0, 3:])
         mol_avg_df = avg_df[avg_df["Molecule"] == molecule]
         mol_long_df = df[df["Molecule"] == molecule]
-        plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, mol_avg_df, mol_long_df, molecule)
+        plot_molecule_data(
+            ax_scatter,
+            ax_hist_top,
+            ax_hist_right,
+            ax_img,
+            mol_avg_df,
+            mol_long_df,
+            molecule,
+            circuit_order,
+        )
 
     # plt.suptitle("Quantum Kernel Transferability – Formaldehyde, Water, Ethylene, Ammonia", fontsize=18, fontweight='bold')
     # plt.tight_layout()
     plt.subplots_adjust(left=0.08, right=0.95, top=0.95, bottom=0.05)
-    plt.savefig("graphs/Formaldehyde_4x4.png", dpi=300)
+    plt.savefig(os.path.join(output_dir, f"{training_set}_4x4.png"), dpi=300)
+    plt.close(fig)
     
     molecules = ["Ammonia", "Methane", "Methanol", "Ethane"]
     for i, molecule in enumerate(molecules):
@@ -226,7 +267,27 @@ def plot_4x4_molecules(csv_file_path, scaler_file_path):
         ax_img = fig.add_subplot(gs_sub[0, 3:])
         mol_avg_df = avg_df[avg_df["Molecule"] == molecule]
         mol_long_df = df[df["Molecule"] == molecule]
-        plot_molecule_data(ax_scatter, ax_hist_top, ax_hist_right, ax_img, mol_avg_df, mol_long_df, molecule)
-        plt.savefig(f"graphs/Formaldehyde_{molecule}_exp_pred.png", dpi=300)
-#"transferability/STO-3G/Water-Formaldehyde/Expected_Predicted.csv"
-plot_4x4_molecules("Form_Expected_Predicted.csv", "Data/STO-3G/Water/scaled/t2_scaler.bin")
+        plot_molecule_data(
+            ax_scatter,
+            ax_hist_top,
+            ax_hist_right,
+            ax_img,
+            mol_avg_df,
+            mol_long_df,
+            molecule,
+            circuit_order,
+        )
+        plt.savefig(os.path.join(output_dir, f"{training_set}_{molecule}_exp_pred.png"), dpi=300)
+        plt.close(fig)
+
+training_set = os.getenv("TRAIN_MOLECULE", "Formaldehyde")
+output_dir = os.getenv("FIGURE_OUTPUT_DIR", "paper_results/regenerated_figures")
+source_path = (
+    f"paper_results/transferability/STO-3G/{training_set}/Expected_Predicted.csv"
+)
+plot_4x4_molecules(
+    source_path,
+    "data/training/STO-3G/Water/scaled/t2_scaler.bin",
+    training_set,
+    output_dir,
+)

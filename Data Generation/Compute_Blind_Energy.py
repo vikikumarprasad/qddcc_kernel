@@ -8,6 +8,15 @@ import joblib
 import time
 from shutil import copy
 import numpy as np
+
+# Compatibility for supplied pandas pickles created with NumPy 2.
+if int(np.__version__.split(".", 1)[0]) < 2:
+    import numpy.core.multiarray as _numpy_multiarray
+    import numpy.core.numeric as _numpy_numeric
+
+    sys.modules.setdefault("numpy._core.multiarray", _numpy_multiarray)
+    sys.modules.setdefault("numpy._core.numeric", _numpy_numeric)
+
 import pandas as pd
 #import tensorflow as tf
 import os
@@ -63,8 +72,8 @@ properties=['Evir1', 'Hvir1', 'Jvir1', 'Kvir1', 'Evir2', 'Hvir2', 'Jvir2', 'Kvir
 
 
 molecule_file = f"{structure}"
-data_path = rf"Blind_Test/{molecule_file}.xyz"
-out_path = rf"./Blind_Data/{structure}/"
+data_path = rf"data/geometries/blind/{molecule_file}.xyz"
+out_path = rf"./data/blind/{structure}/"
 
 print(data_path)
 
@@ -108,7 +117,7 @@ try:
     t1_path = os.path.join(out_path + "pickle/t1_" + molecule_file + "_alldata" + ".pkl.gz")
     t2_path = os.path.join(out_path + "pickle/" + molecule_file + "_alldata" + ".pkl.gz")
 
-    ml_data = pd.DataFrame(pd.read_csv("Expected_Predicted.csv"))
+    ml_data = pd.DataFrame(pd.read_csv("paper_results/blind/Expected_Predicted.csv"))
     ml_data = ml_data[ml_data["Molecule"] == molecule_file]
     
     ml_data['Circuit_Type'] = ml_data['Circuit'].str.split('_').str[0]
@@ -169,7 +178,7 @@ try:
         print(rf"MP2 Delta E = {t2_eng - mp2_eng:.3e}")
         print(rf"DDCC {circuit} Delta E = {t2_eng - ml_eng:.3e}")
         
-        out_path = "Energy_MAE_Data.csv"
+        out_path = "paper_results/blind/Energy_MAE_Data.csv"
         if not written_mp2:
             written_mp2 = True
             with open(out_path, mode='a', newline='') as file:

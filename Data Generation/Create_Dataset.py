@@ -1,32 +1,23 @@
-import sys
 import joblib
-import time
-from shutil import copy
+import json
 import numpy as np
+from pathlib import Path
+import sys
+
+# The supplied pandas pickles were written with NumPy 2, whose internal
+# module path changed. Keep them readable in the NumPy 1.x project environment.
+if int(np.__version__.split(".", 1)[0]) < 2:
+    import numpy.core.multiarray as _numpy_multiarray
+    import numpy.core.numeric as _numpy_numeric
+
+    sys.modules.setdefault("numpy._core.multiarray", _numpy_multiarray)
+    sys.modules.setdefault("numpy._core.numeric", _numpy_numeric)
+
 import pandas as pd
 import os
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF
-from sklearn.kernel_ridge import KernelRidge
-from sklearn.linear_model import Ridge, Lasso, ElasticNet
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.model_selection import GridSearchCV
-from sklearn.decomposition import PCA
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-
-# from tqdm.notebook import tqdm
-import seaborn as sns
-from collections import Counter
-
-from glob import glob
 
 import math
 
@@ -38,7 +29,7 @@ properties=['Evir1', 'Hvir1', 'Jvir1', 'Kvir1', 'Evir2', 'Hvir2', 'Jvir2', 'Kvir
 
 # Open the file in binary read mode and load the data
 for i in range(2, num_files + 1):
-    file_path = f"Data/{basis_set}/{structure}/pickle/{structure.lower()}{i}_alldata.pkl.gz"
+    file_path = f"data/training/{basis_set}/{structure}/pickle/{structure.lower()}{i}_alldata.pkl.gz"
 
     if i == 2:
         data = pd.read_pickle(file_path)
@@ -49,12 +40,48 @@ for i in range(2, num_files + 1):
         data = pd.concat([data, new_data], ignore_index=True)
         print(len(new_data['t2']))
 
-# Data process 
-train,test=train_test_split(range(math.ceil(len(data)/num_t2)),train_size=0.8,test_size=0.2)
+# Preserve the recovered paper split whenever possible. The names stored in
+# the original joblib files are zero-based indices into the ordered pickle
+# sequence (index 0 corresponds to the file numbered 2).
+num_samples = math.ceil(len(data) / num_t2)
+manifest_path = Path(
+    os.getenv(
+        "SPLIT_MANIFEST",
+        f"data/splits/{basis_set}/{structure}.json",
+    )
+)
 
+if manifest_path.exists():
+    manifest = json.loads(manifest_path.read_text())
+    train_name = manifest["train_names"]
+    test_name = manifest["test_names"]
+    train = [int(name.removeprefix(structure)) for name in train_name]
+    test = [int(name.removeprefix(structure)) for name in test_name]
+    print(f"Using recovered split manifest: {manifest_path}")
+else:
+    random_seed_value = os.getenv("RANDOM_SEED")
+    if random_seed_value is None:
+        raise FileNotFoundError(
+            f"Recovered split manifest not found: {manifest_path}. "
+            "Refusing to invent a new split. Set RANDOM_SEED explicitly only "
+            "when intentionally creating a new experiment."
+        )
+    train, test = train_test_split(
+        range(num_samples),
+        train_size=0.8,
+        test_size=0.2,
+        random_state=int(random_seed_value),
+    )
+    train_name = [f'{structure}{i}' for i in train]
+    test_name = [f'{structure}{i}' for i in test]
+    print(f"Creating a new split with RANDOM_SEED={random_seed_value}")
 
-train_name = [f'{structure}{i}' for i in train]
-test_name = [f'{structure}{i}' for i in test]
+if set(train) & set(test):
+    raise ValueError("Training and test splits overlap")
+if max([*train, *test]) >= num_samples:
+    raise ValueError(
+        f"Split manifest references an index outside the {num_samples} loaded samples"
+    )
 
 print(train_name)
 
@@ -87,7 +114,7 @@ y_scaler = scaler((-1, 1))
 X_train=x_scaler.fit_transform(X_train)
 y_train=y_scaler.fit_transform(y_train.reshape(-1,1)).flatten()
 
-X_test = x_scaler.fit_transform(X_test)
+X_test = x_scaler.transform(X_test)
 y_test = y_scaler.transform(y_test.reshape(-1,1)).flatten()
 
 print(X_train.shape,y_train.shape)
@@ -108,7 +135,8 @@ print(properties)
 
 print(X_train[10][top5])
 
-scaled_features = f'./Blind_Data/{structure}/scaled/'
+scaled_features = f'./data/training/{basis_set}/{structure}/scaled/'
+os.makedirs(scaled_features, exist_ok=True)
 x_scale_file = scaled_features + "feature_scaler.bin"
 y_scale_file = scaled_features + "t2_scaler.bin"
 
@@ -145,8 +173,8 @@ with open(scaled_features + "15_feature_test.bin", "wb") as f:
 
 #stores all features
 with open(scaled_features + "full_feature_train.bin", "wb") as f:
-    joblib.dump({"X":X_train, "y":y_train, "names":train_name, "features":properties}, f)
+    joblib.dump({"X":X_train, "y":y_train, "names":train_name, "features":properties[:-1]}, f)
     f.close()
 with open(scaled_features + "full_feature_test.bin", "wb") as f:
-    joblib.dump({"X":X_test, "y":y_test, "names":test_name, "features":properties}, f)
+    joblib.dump({"X":X_test, "y":y_test, "names":test_name, "features":properties[:-1]}, f)
     f.close()

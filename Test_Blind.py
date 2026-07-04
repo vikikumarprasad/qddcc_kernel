@@ -42,6 +42,8 @@ hyper_optimized = os.getenv("HYPERPARAMETERS")
 trainable = os.getenv("TRAINABLE").upper()
 basis = os.getenv("BASIS_SET")
 measure = os.getenv("MEASURE")
+random_seed = int(os.getenv("RANDOM_SEED", "42"))
+np.random.seed(random_seed)
 top = os.getcwd()
 if not date is None:
     input_path = os.path.join(top, rf"{date}/")
@@ -51,7 +53,7 @@ else:
 #Load models
 if model_type != "SVR" and model_type != "KRR" and model_type != "GPR":
     model_path = rf"models/{train_molecule}/{trainable}_{kernel_type}_{hyper_optimized}_{num_features}_{circuit_struct}_{degree}_{layers}_{model_type}"
-    out_path = rf"Blind/{train_molecule}/{trainable}_{kernel_type}_{num_features}_{circuit_struct}-{degree}-{layers}-{model_type}"
+    out_path = rf"paper_results/blind/{train_molecule}/{trainable}_{kernel_type}_{num_features}_{circuit_struct}-{degree}-{layers}-{model_type}"
 
     if trainable == "FALSE":
         model_path += f"-{job_num}"
@@ -64,13 +66,15 @@ if model_type != "SVR" and model_type != "KRR" and model_type != "GPR":
 else:
     if hyper_optimized == "OPTIMIZED":
         model_path = rf"models/{train_molecule}/{hyper_optimized}_{model_type}"
-        out_path = rf"Blind/{train_molecule}/{hyper_optimized}_{model_type}"
+        out_path = rf"paper_results/blind/{train_molecule}/{hyper_optimized}_{model_type}"
     else:
         model_path = rf"models/{train_molecule}/{model_type}"
-        out_path = rf"Blind/{train_molecule}/{model_type}"
+        out_path = rf"paper_results/blind/{train_molecule}/{model_type}"
 
     model_path += ".bin"
     out_path += ".csv"
+
+os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
 molecules = train_molecule.split("-")
 scale = data_format
@@ -79,16 +83,16 @@ total_y_train = np.array([])
 for molecule_struct in molecules:
     top=os.getcwd()
     if scale != "Water-Scaled":
-        with open(rf'Data/STO-3G/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
+        with open(rf'data/training/STO-3G/{molecule_struct}/scaled/{num_features}_feature_train.bin','rb') as f:
             ddcc_train = joblib.load(f)
 
-        with open(rf'Data/STO-3G/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+        with open(rf'data/training/STO-3G/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
             ddcc_scaler = joblib.load(f)
     else:
-        with open(rf'Data/STO-3G/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
+        with open(rf'data/training/STO-3G/{molecule_struct}/scaled/full_feature_train.bin','rb') as f:
             ddcc_train = joblib.load(f)
 
-        with open(rf'Data/STO-3G/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
+        with open(rf'data/training/STO-3G/{molecule_struct}/scaled/t2_scaler.bin','rb') as f:
             ddcc_scaler = joblib.load(f)
 
     # print(ddcc_train.keys())
@@ -98,13 +102,13 @@ for molecule_struct in molecules:
 
     if scale=="Water-Scaled":
         print("Scaling data")
-        with open(rf"Data/STO-3G/Water/scaled/feature_scaler.bin", 'rb') as f:
+        with open(rf"data/training/STO-3G/Water/scaled/feature_scaler.bin", 'rb') as f:
             water_feature_scaler = joblib.load(f)
-        with open(rf"Data/STO-3G/Water/scaled/t2_scaler.bin", 'rb') as f:
+        with open(rf"data/training/STO-3G/Water/scaled/t2_scaler.bin", 'rb') as f:
             water_t2_scaler = joblib.load(f)
-        with open(rf"Data/STO-3G/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
+        with open(rf"data/training/STO-3G/{molecule_struct}/scaled/feature_scaler.bin", 'rb') as f:
             molecule_feature_scaler = joblib.load(f)
-        with open(rf"Data/STO-3G/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
+        with open(rf"data/training/STO-3G/{molecule_struct}/scaled/t2_scaler.bin", 'rb') as f:
             molecule_t2_scaler = joblib.load(f)
         print(water_feature_scaler, water_t2_scaler)
         print(molecule_feature_scaler, molecule_t2_scaler)
@@ -139,7 +143,7 @@ test_molecules = ["Benzene", "Chlorine", "Nitrogen", "Ozone", "Pentane", "Pyrazi
 
 
 for molecule_struct in test_molecules:
-    data_path2 = rf"Blind_Data/{molecule_struct}/scaled/full_feature_train.bin"
+    data_path2 = rf"data/blind/{molecule_struct}/scaled/full_feature_train.bin"
     with open(data_path2, 'rb') as f:
         data_file = joblib.load(f)
         X_test2 = data_file["X"]
@@ -150,13 +154,13 @@ for molecule_struct in test_molecules:
 
     print(X_test.shape, y_test.shape)
     if data_format == "Water-Scaled":
-        with open(os.path.join(top, rf"Data/STO-3G/Water/scaled/feature_scaler.bin"), 'rb') as f:
+        with open(os.path.join(top, rf"data/training/STO-3G/Water/scaled/feature_scaler.bin"), 'rb') as f:
             water_feature_scaler = joblib.load(f)
-        with open(os.path.join(top, rf"Data/STO-3G/Water/scaled/t2_scaler.bin"), 'rb') as f:
+        with open(os.path.join(top, rf"data/training/STO-3G/Water/scaled/t2_scaler.bin"), 'rb') as f:
             water_t2_scaler = joblib.load(f)
-        with open(os.path.join(top, rf"Blind_Data/{molecule_struct}/scaled/feature_scaler.bin"), 'rb') as f:
+        with open(os.path.join(top, rf"data/blind/{molecule_struct}/scaled/feature_scaler.bin"), 'rb') as f:
             molecule_feature_scaler = joblib.load(f)
-        with open(os.path.join(top, rf"Blind_Data/{molecule_struct}/scaled/t2_scaler.bin"), 'rb') as f:
+        with open(os.path.join(top, rf"data/blind/{molecule_struct}/scaled/t2_scaler.bin"), 'rb') as f:
             molecule_t2_scaler = joblib.load(f)
         unscaledX_test = molecule_feature_scaler.inverse_transform(X_test)
         unscaledy_test = molecule_t2_scaler.inverse_transform(y_test.reshape(-1, 1))
@@ -175,7 +179,7 @@ for molecule_struct in test_molecules:
     predictions = model.predict(X_test)
     print(out_path)
     print(predictions.shape)
-    expected_predicted_path = rf"Blind/{train_molecule}/Expected_Predicted.csv"
+    expected_predicted_path = rf"paper_results/blind/{train_molecule}/Expected_Predicted.csv"
 
     unscaledy_test = water_t2_scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
     unscaledy_predictions = water_t2_scaler.inverse_transform(predictions.reshape(-1, 1)).flatten()

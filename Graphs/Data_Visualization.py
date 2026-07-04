@@ -14,7 +14,7 @@ from Circuit_Classes import *
 figure = plt.figure(figsize=(12,8))
 
 top = os.getcwd()
-folder_path = os.path.join(top, "transferability/STO-3G/")
+folder_path = os.path.join(top, "paper_results/transferability/STO-3G/")
 target_files = []
 circuit_names = []
 for filename in os.listdir(folder_path):
