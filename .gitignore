@@ -9,3 +9,9 @@ acs-main.bib
 *.out
 *.synctex.gz
 __pycache__/
+data/
+paper_results/
+images/
+old/
+*.tar.zst
+*.zip
