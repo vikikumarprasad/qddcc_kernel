@@ -1,0 +1,35 @@
+name: qddcc_kernel
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.10
+  - pip>=24
+  - libblas=*=*openblas
+  - numpy>=1.26,<2
+  - pandas
+  - scipy>=1.15,<2
+  - scikit-learn=1.7.0
+  - matplotlib-base>=3.8,<4
+  - seaborn
+  - pillow
+  - joblib>=1.4
+  - psutil
+  - tqdm
+  - nbformat
+  - nbclient
+  - ipykernel
+  - zstd
+  - shap
+  - psi4
+  - sympy>=1.12,<2
+  - symengine>=0.11,<0.15
+  - pip:
+      - numpy>=1.26,<2
+      - symengine>=0.11,<0.15
+      - qiskit>=1.0,<1.1
+      - qiskit-aer>=0.14,<0.15
+      - qiskit-algorithms>=0.3,<0.4
+      - qiskit-ibm-runtime>=0.18,<0.24
+      - qiskit-machine-learning>=0.7,<0.8.4
+      - squlearn>=0.8.3,<0.9

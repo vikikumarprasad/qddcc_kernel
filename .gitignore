@@ -1,0 +1,26 @@
+# Latex intermediate files
+acs-*.bib
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
+latex/*.pdf
+__pycache__/
+.cache/
+.mplconfig/
+
+# Large datasets/results are distributed through Zenodo.
+latex/
+data/
+original_data/
+new_data/
+paper_results/
+images/
+archive/
+*.tar.zst
+timer.dat
