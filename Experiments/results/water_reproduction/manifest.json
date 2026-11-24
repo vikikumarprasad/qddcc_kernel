@@ -1,0 +1,58 @@
+{
+  "source": "Water",
+  "basis": "STO-3G",
+  "seed": 42,
+  "quantum_configuration": "ZZ_map-atan-L1",
+  "training_samples": 10176,
+  "cv": "KFold(5, shuffle=False), full training data, fold-local COBYLA",
+  "quantum_grid": {
+    "C": [
+      0.1,
+      0.25,
+      0.5,
+      1,
+      5,
+      10
+    ],
+    "epsilon": [
+      0.1,
+      0.05,
+      0.03,
+      0.08
+    ]
+  },
+  "classical_grid": {
+    "gamma": [
+      "auto",
+      1,
+      0.1,
+      0.01,
+      0.05,
+      0.001
+    ],
+    "C": [
+      0.1,
+      0.5,
+      1,
+      5,
+      10
+    ],
+    "epsilon": [
+      0.1,
+      0.05,
+      0.03,
+      0.08
+    ]
+  },
+  "quantum_gamma": 1,
+  "optimizer": "COBYLA(maxiter=100, rhobeg=1); SVR(C=1,epsilon=.1,max_iter=50) training MSE",
+  "versions": {
+    "numpy": "1.26.4",
+    "scipy": "1.15.2",
+    "scikit-learn": "1.7.0",
+    "qiskit": "1.0.2",
+    "qiskit-aer": "0.14.2",
+    "squlearn": "0.8.4"
+  },
+  "scope": "One retrospectively selected ZZFeatureMap/arctan/L1 configuration with seed 42; independent 1024-shot evaluations."
+}

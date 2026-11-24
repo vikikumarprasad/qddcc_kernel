@@ -2,7 +2,6 @@ import numpy as np
 from typing import Union
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit import ParameterVector, Parameter, ParameterExpression
-from qiskit.circuit import Instruction
 from sympy import Integer
 import sympy
 import symengine as se
@@ -129,12 +128,10 @@ def FunctionEncoder(
                         num_params += 1
 
             if expression_changed:
-                new_operation = Instruction(
-                    name=operation.name,
-                    num_qubits=operation.num_qubits,
-                    num_clbits=operation.num_clbits,
-                    params=new_params
-                )
+                # Keep the actual gate class (and hence its matrix/definition).
+                # A bare Instruction named "rx" is accepted by Aer but cannot be
+                # evolved by Qiskit's reference Statevector/Estimator.
+                new_operation = operation.base_class(*new_params, label=operation.label)
             else:
 
                 if len(new_params) >= 1:

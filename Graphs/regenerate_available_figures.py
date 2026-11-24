@@ -1,4 +1,4 @@
-"""Regenerate every manuscript figure supported by the recovered sources."""
+"""Generate the manuscript figures supported by the available source data."""
 
 from __future__ import annotations
 
@@ -45,8 +45,8 @@ def parse_args() -> argparse.Namespace:
         "--include-recomputed-shap",
         action="store_true",
         help=(
-            "also run a fresh SHAP analysis as a separately named diagnostic; "
-            "its values do not match the published figure"
+            "also run a fresh SHAP calculation and write it to "
+            "ccsd_shap_summary_bar_recomputed.png"
         ),
     )
     parser.add_argument(
@@ -83,14 +83,21 @@ def main() -> None:
     run("plot_published_shap.py")
     run("plot_water_r2_energy.py")
     run("plot_water_r2_expr_entg.py")
+    run("plot_cpmap_blocks.py")
+    subprocess.run(
+        [sys.executable, str(ROOT / "Experiments/plot_bandwidth.py"),
+         str(ROOT / "Experiments/results/gamma_scan.csv"), "Formaldehyde",
+         str(OUTPUT_DIR / "Formaldehyde_gamma_scan.png")],
+        cwd=ROOT, check=True,
+    )
     if not args.skip_circuit_montage:
         run("generate_circuit_montage.py")
 
     if args.include_recomputed_shap:
         run("Shap_Graphs.py")
         print(
-            "Warning: ccsd_shap_summary_bar_recomputed.png is a fresh SHAP "
-            "computation, not a reproduction of the published values."
+            "ccsd_shap_summary_bar_recomputed.png contains a fresh SHAP "
+            "computation; its values depend on the fitted forest and SHAP settings."
         )
 
     print(f"Regenerated figures are in {OUTPUT_DIR}")

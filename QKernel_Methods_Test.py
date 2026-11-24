@@ -36,6 +36,7 @@ from sklearn.svm import SVR
 from sklearn.gaussian_process import GaussianProcessRegressor
 import itertools
 from FunctionEncoder import *
+from EncodingCircuit import CloneableQiskitEncodingCircuit
 import csv
 
 degree = os.getenv("ENCODING_DEGREE")
@@ -177,7 +178,7 @@ def quantum_kernel_method(circuit_struct, degree, layers, model_type):
         function_encoded_circuit = FunctionEncoder(encoding_circuit, atan_relation_function, False)
     #if kernel_type == "Fidelity":
     #    function_encoded_circuit = function_encoded_circuit.to_gate()
-    encoding_circuit = QiskitEncodingCircuit(function_encoded_circuit, parameter_label=["Phi","P","θ"], feature_label="X")
+    encoding_circuit = CloneableQiskitEncodingCircuit(function_encoded_circuit, parameter_label=["Phi","P","θ"], feature_label="X")
     num_params = encoding_circuit.num_parameters
     initial_parameters = (np.random.rand(num_params) * 2 * np.pi) - np.pi
     print(initial_parameters)

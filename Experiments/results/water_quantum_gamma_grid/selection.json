@@ -1,0 +1,18 @@
+{
+  "best_params": {
+    "C": 10.0,
+    "epsilon": 0.03,
+    "gamma": 0.05
+  },
+  "cv_r2": 0.9979468378890056,
+  "training_water_test_r2": 0.9974452419358958,
+  "transfer_water_test_r2": 0.9974539473873895,
+  "mean_transfer_test_r2": 0.8273434285045539,
+  "mean_transfer_all_r2": 0.8252228896871096,
+  "seed": 42,
+  "shots": 1024,
+  "full_optimization_evaluations": 94,
+  "full_optimization_converged": true,
+  "transfer_reload_seed": 137,
+  "sampling": "Independent binomial draws"
+}

@@ -1,0 +1,27 @@
+# Build context: environment, scripts and saved result tables only.
+# Data, archives, results and models are mounted at run time, not copied.
+*
+!environment.yml
+!Circuit_Classes.py
+!EncodingCircuit.py
+!FunctionEncoder.py
+!QKernel_Methods_Test.py
+!Test_Blind.py
+!Training_Functions.py
+!Transferability_Test.py
+!README.md
+!LICENCE.txt
+!Data Generation
+Data Generation/**
+!Data Generation/*.py
+!Data Generation/*.ipynb
+!Graphs
+Graphs/**
+!Graphs/*.py
+!Graphs/*.ipynb
+!Graphs/figure1b_published_shap.csv
+!Experiments
+Experiments/**
+!Experiments/*.py
+!Experiments/README.md
+!Experiments/results

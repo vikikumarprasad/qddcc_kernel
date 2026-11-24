@@ -1,0 +1,38 @@
+{
+  "purpose": "Water bandwidth comparison on Figure 5 target test splits",
+  "n_train": 10176,
+  "source": "Water",
+  "basis": "STO-3G",
+  "cv": "Saved KFold(5, shuffle=False) amplitude-fold scores; scalers fitted on water training data",
+  "C_grid": [
+    0.1,
+    0.5,
+    1.0,
+    5.0,
+    10.0
+  ],
+  "epsilon_grid": [
+    0.03,
+    0.05,
+    0.08,
+    0.1
+  ],
+  "gamma_grid": [
+    0.001,
+    0.01,
+    0.05,
+    0.1,
+    0.2,
+    1.0
+  ],
+  "C_epsilon_selection": "Highest water CV score independently at each gamma",
+  "classical_source_selected_gamma": 0.2,
+  "transfer_population": "Test split of each of six targets; unweighted mean of six R2 scores",
+  "posthoc_scope": "Choosing gamma by transfer scores uses target labels",
+  "quantum_scope": "One seed for the retrospectively selected ZZFeatureMap/arctan/L1 architecture.",
+  "figure5_baseline_max_score_error": 1.1102230246251565e-16,
+  "versions": {
+    "numpy": "1.26.4",
+    "sklearn": "1.7.0"
+  }
+}

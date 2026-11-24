@@ -1,0 +1,10 @@
+{
+  "best_params": {
+    "C": 10,
+    "epsilon": 0.03,
+    "gamma": "auto"
+  },
+  "cv_r2": 0.9963593267362778,
+  "n_train": 10176,
+  "candidates": 120
+}

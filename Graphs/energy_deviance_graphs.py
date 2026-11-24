@@ -1,8 +1,10 @@
+import argparse
 import pandas as pd
-import io
 import os
 from pathlib import Path
 import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "qddcc-mplconfig"))
@@ -21,11 +23,49 @@ plt.rcParams.update({
     'legend.fontsize': 14,
 })
 
-df = pd.read_csv("paper_results/blind/Energy_MAE_Data.csv")
-
-# Get unique molecules and circuits
 molecules = ["Pyrazine", "Benzene", "Pentane", "Nitrogen", "Chlorine", "Ozone", "Thioformaldehyde"]
 circuits = ["MP2", "Classical", "Chebyshev", "Hubregtsen", "MultiControl"]
+
+
+def load_energy_summary(path):
+    """Average absolute energy deviations over the supplied model repetitions."""
+    data = pd.read_csv(path)
+    # The archived summary names the amplitude-error column "t2 MAE".
+    error_columns = [column for column in ("t2 MA", "t2 MAE") if column in data.columns]
+    if len(error_columns) > 1:
+        raise ValueError("Ambiguous amplitude-error columns: 't2 MA' and 't2 MAE'")
+    data = data.rename(columns={column: "t2 MA" for column in error_columns})
+    required = {"Molecule", "Circuit", "t2 MA", "Energy Devience"}
+    if not required.issubset(data.columns):
+        raise ValueError(f"Missing energy columns: {required - set(data.columns)}")
+    if data.duplicated(["Molecule", "Circuit"]).any():
+        raise ValueError("Duplicate molecule/circuit energy records")
+    labels = data.Circuit.str.extract(
+        r"^(MP2|Classical|Chebyshev|Hubregtsen|MultiControl)(?:_((?:\d+|atan)_\d+)_\d+)?$"
+    )
+    data["Family"] = labels[0]
+    data["Configuration"] = labels[1].fillna("summary")
+    if data.Family.isna().any() or set(data.Molecule) != set(molecules):
+        raise ValueError("Unexpected molecule or circuit configuration")
+    if (data.groupby("Family").Configuration.nunique() > 1).any():
+        raise ValueError("Use one encoding and circuit depth per model family")
+    values = data[["t2 MA", "Energy Devience"]].to_numpy(float)
+    if not np.isfinite(values).all() or (values < 0).any():
+        raise ValueError("Absolute deviations must be finite and nonnegative")
+    counts = data.groupby(["Molecule", "Family"]).size()
+    expected = pd.MultiIndex.from_product([molecules, circuits], names=counts.index.names)
+    if counts.reindex(expected).isna().any():
+        raise ValueError("Missing molecule/model energy results")
+    if (counts.xs("MP2", level="Family") != 1).any():
+        raise ValueError("Each molecule must have one MP2 reference")
+    return (data.groupby(["Molecule", "Family"])["Energy Devience"].mean()
+            .reindex(expected).reset_index().rename(columns={"Family": "Circuit"}))
+
+
+parser = argparse.ArgumentParser(description="Plot blind-molecule absolute energy deviations.")
+parser.add_argument("--energy", type=Path, default=ROOT / "Experiments/results/blind/energy_mae.csv")
+args = parser.parse_args()
+df = load_energy_summary(args.energy)
 num_molecules = len(molecules)
 
 # Create a single row of subplots

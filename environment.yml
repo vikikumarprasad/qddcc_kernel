@@ -6,9 +6,9 @@ dependencies:
   - python=3.10
   - pip>=24
   - libblas=*=*openblas
-  - numpy>=1.26,<2
+  - numpy=1.26.4
   - pandas
-  - scipy>=1.15,<2
+  - scipy=1.15.2
   - scikit-learn=1.7.0
   - matplotlib-base>=3.8,<4
   - seaborn
@@ -21,15 +21,17 @@ dependencies:
   - ipykernel
   - zstd
   - shap
-  - psi4
+  - psi4=1.11
+  - einsums=1.1.3
+  - libxc-c=7.0.0
   - sympy>=1.12,<2
   - symengine>=0.11,<0.15
   - pip:
-      - numpy>=1.26,<2
+      - numpy==1.26.4
       - symengine>=0.11,<0.15
-      - qiskit>=1.0,<1.1
-      - qiskit-aer>=0.14,<0.15
+      - qiskit==1.0.2
+      - qiskit-aer==0.14.2
       - qiskit-algorithms>=0.3,<0.4
       - qiskit-ibm-runtime>=0.18,<0.24
       - qiskit-machine-learning>=0.7,<0.8.4
-      - squlearn>=0.8.3,<0.9
+      - squlearn==0.8.4

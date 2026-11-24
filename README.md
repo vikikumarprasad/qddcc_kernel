@@ -1,62 +1,104 @@
 # QDDCC Quantum Kernel Models
 
-This project explores quantum kernel methods for DDCC `t2` amplitude prediction.
-It contains utilities for modifying Qiskit/sQUlearn feature maps, training
-quantum and classical kernel models, and evaluating trained models on transfer
-and blind molecule sets.
+Code and data for predicting coupled-cluster doubles amplitudes with classical
+and projected quantum kernels. The repository includes training, transfer and
+blind-test workflows, saved experiment summaries, and scripts for the manuscript
+figures and Supporting Information tables.
+
+[Experiments/README.md](Experiments/README.md) lists the included experiments,
+scripts and data, with their settings and commands.
 
 ## Environment
 
-Create the Conda environment from the project root. The environment includes
-Psi4 and Qiskit/sQUlearn, so use the libmamba solver; the classic solver is
-substantially slower for this dependency set.
+Create the Conda environment from the repository root:
 
 ```bash
 conda env create --solver libmamba -f environment.yml
 conda activate qddcc_kernel
 ```
 
-## Data and results from Zenodo
+The environment includes Psi4, Qiskit and sQUlearn. Numerical-library versions
+are pinned to the experiment environment; SciPy 1.15.2 supplies the COBYLA
+implementation used in the saved optimization runs.
 
-The large files are packaged separately from the source repository.
+Figure 1(b) labels are typeset with LaTeX. `Graphs/plot_published_shap.py`, run by
+`Graphs/regenerate_available_figures.py`, and `Graphs/Shap_Graphs.py` need a system
+TeX installation with `dvipng` and the `amsmath`, `braket`, `type1cm` and `type1ec`
+packages, for example the Debian/Ubuntu packages `texlive-latex-extra`,
+`cm-super-minimal` and `dvipng`.
 
-**Zenodo record:** https://doi.org/10.5281/zenodo.20792229
+## Data and results
+
+The large input datasets and result archives are stored on
+[Zenodo](https://doi.org/10.5281/zenodo.20792229).
 
 | Archive | Download | Extracted | Contents |
 | --- | ---: | ---: | --- |
-| `qddcc_data_v1.tar.zst` | 6.2 GB | 20 GB | Ready-to-use `data/` required by the project scripts |
-| `qddcc_paper_results_v1.tar.zst` | 4.2 GB | 16 GB | Source/result CSV files under `paper_results/` and static molecule artwork under `images/`; generated figure PNGs are excluded |
+| `qddcc_data_v1.tar.zst` | 6.6 GB | 21 GB | Features, amplitudes, scalers, geometries and train/test splits under `data/` |
+| `qddcc_paper_results_v1.tar.zst` | 4.5 GB | 17 GB | Result CSV files under `paper_results/` and static molecule artwork under `images/` |
 
-Download both archives from the Zenodo record into the root of this repository.
-Verify them before extraction:
+Sizes use decimal GB. Download the archives into the repository root, verify
+their checksums and extract them:
 
 ```bash
 sha256sum --check SHA256SUMS
-```
-
-Create and activate the Conda environment first if your system does not
-already provide `zstd`, then extract the archives from the repository root:
-
-```bash
 tar --zstd -xf qddcc_data_v1.tar.zst
 tar --zstd -xf qddcc_paper_results_v1.tar.zst
 ```
 
-After extraction, the code can use `data/`, `paper_results/`, and `images/`
-directly; no paths need to be edited. The results archive contains CSV result
-files and the static molecule artwork used in the manuscript figures, but it
-does not include generated figure PNGs. Download the data archive as well to
-train models or rerun figure scripts that read the dataset.
+Small result tables are included in `Experiments/results/`.
+Experiment scripts save models, predictions and detailed run logs locally under
+`paper_results/`. These generated files are kept outside Git.
 
-## Data Layout
+### Partial extraction
 
-Run scripts from the repository root.
+Individual molecules and basis sets can be extracted after downloading an archive.
+
+| Path | Extracted size | Contents |
+| --- | ---: | --- |
+| `data/training/STO-3G/` | 0.4 GB | Features, targets, scalers and pickles for seven molecules |
+| `data/training/cc-pVDZ/` | 20.4 GB | The corresponding cc-pVDZ data |
+| `data/blind/` | 0.3 GB | Blind-molecule descriptors and amplitudes |
+| `data/geometries/`, `data/splits/` | < 1 MB total | XYZ files and split manifests |
+| `paper_results/energy/`, `paper_results/training/`, `paper_results/water_r2_expr_entg/` | < 1 MB each | Energy, training and circuit-metric summaries |
+| `paper_results/transferability/` | 4.5 GB | Scores and per-amplitude transfer predictions |
+| `paper_results/water_energy/` | 12 GB | Training-size predictions |
+| `paper_results/blind/` | 0.1 GB | Blind-molecule prediction export and energy summary; Figure 8 data are in `Experiments/results/blind/energy_mae.csv` |
+
+For STO-3G water training:
+
+```bash
+tar --zstd -xf qddcc_data_v1.tar.zst data/training/STO-3G/Water
+```
+
+For the water and formaldehyde transfer studies in SI Sections S5 and S8:
+
+```bash
+tar --zstd -xf qddcc_data_v1.tar.zst data/training/STO-3G
+tar --zstd -xf qddcc_paper_results_v1.tar.zst paper_results/transferability/STO-3G/Water
+```
+
+For Figure 4b training and the reference-energy check:
+
+```bash
+tar --zstd -xf qddcc_data_v1.tar.zst data/training/cc-pVDZ/Water data/geometries/training/water
+```
+
+The water scalers are required when loading other molecules with
+`Experiments/qk_common.py`. Generated figure images are written locally by the
+plotting scripts; the archives supply the static molecule artwork they use.
+
+## Repository layout
 
 ```text
+Data Generation/                 Feature generation and energy calculations
+Experiments/                     Experiment scripts and saved numerical results
+Graphs/                          Figure scripts
+
 data/
-  geometries/
-    training/<MOLECULE>/*.xyz
-    blind/<MOLECULE>.xyz
+  geometries/training/<MOLECULE>/*.xyz
+  geometries/blind/<MOLECULE>.xyz
+  splits/
   training/<BASIS_SET>/<MOLECULE>/
     output/
     pickle/
@@ -71,61 +113,18 @@ data/
     scaled/
 ```
 
-Training models are written under `models/`.
+Run commands from the repository root. Trained models are written under `models/`.
 
-## Script Order
+## Training and transfer
 
-1. `FunctionEncoder.py`
+`QKernel_Methods_Test.py` trains and saves a model. It imports
+`FunctionEncoder.py` for feature-encoding functions, `EncodingCircuit.py` for
+circuit cloning, and `Training_Functions.py` for the kernel-optimization loss.
 
-   Helper module. Do not run this directly. `QKernel_Methods_Test.py` imports
-   `FunctionEncoder` to wrap feature-containing circuit parameters with custom
-   functions such as polynomial or arctangent encodings.
-
-2. `Training_Functions.py`
-
-   Helper module. Do not run this directly. It defines `MSE_Score`, a custom
-   sQUlearn kernel loss that can be used by kernel optimization.
-
-3. `QKernel_Methods_Test.py`
-
-   Main training script. Run this first to train and save a model under
-   `models/<MOLECULE>/`.
-
-4. `Transferability_Test.py`
-
-   Run after training. It reloads a saved model, refits the kernel object on the
-   original training molecule data, evaluates one target molecule from
-   `data/training/`, and appends the score under
-   `paper_results/transferability/<BASIS_SET>/<MOLECULE>/`.
-
-5. `Test_Blind.py`
-
-   Run after training when blind data is available. It reloads a saved model,
-   refits on the training molecule data, evaluates the hard-coded molecules in
-   `data/blind/`, and appends MAE values under
-   `paper_results/blind/<MOLECULE>/`.
-
-## Reproducing comparable results
-
-We do not need the original saved models or exact paper jobs to run a useful
-reproduction. The prepared data use the recovered paper splits, and
-`RANDOM_SEED` controls data subsampling, initial circuit parameters, and
-simulator sampling. Use the same `RANDOM_SEED` and `JOB_NUM` for training and
-evaluation.
-
-A sensible starting point is five repetitions with seeds and job numbers
-`0` through `4`, using STO-3G, five features, `PERCENT=1.0`, a projected
-kernel, and the circuit/model settings being compared. For each repetition:
-
-1. Run `QKernel_Methods_Test.py` once to train and save the model.
-2. Run `Transferability_Test.py` once for each target `STRUCTURE`.
-3. Run `Test_Blind.py` once if blind-set results are needed.
-4. Regenerate the figures after the result CSVs have been written.
-
-The scripts are configured with environment variables. This example trains a
-projected quantum support-vector regressor on water-scaled data:
+For example, train a water model with a Chebyshev projected kernel:
 
 ```bash
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 ENCODING_DEGREE=atan \
 ENCODING_CIRCUIT=Chebyshev \
 NUM_LAYER=1 \
@@ -146,145 +145,100 @@ RANDOM_SEED=0 \
 python QKernel_Methods_Test.py
 ```
 
-Useful values:
+The scripts use environment variables:
 
-- `ENCODING_DEGREE`: integer degree such as `1` or `2`, or `atan`.
-- `ENCODING_CIRCUIT`: `YZ_CX`, `Chebyshev`, `ZZ_map`, `ParamZ`, `HighDim`,
-  `Hubregtsen`, or `MultiControl`.
-- `MODEL_TYPE`: `qsvr`, `qkrr`, `qgpr`, `svr`, or `krr`. Use
-  `HYPERPARAMETERS=OPTIMIZED` only with model types that define a grid in the
-  script: `qsvr`, `qkrr`, `svr`, and `krr`.
-- `QKERNEL`: `Projected` or `Fidelity` for quantum models.
-- `TRAINABLE`: `True` to optimize kernel parameters, otherwise `False`.
-- `MEASURE`: projected-kernel measurement string such as `XYZ`, `X`, `Y`, or
-  `Z`.
-- `PERCENT`: fraction of each molecule's training set to sample, for example
-  `1.0` for all rows or `0.25` for 25 percent.
-- `RANDOM_SEED`: controls subsampling, initial circuit parameters, and
-  simulator sampling. Pair it with the same `JOB_NUM` for each repetition.
+| Variable | Values or meaning |
+| --- | --- |
+| `ENCODING_DEGREE` | Polynomial degree such as `1` or `2`, or `atan` |
+| `ENCODING_CIRCUIT` | `YZ_CX`, `Chebyshev`, `ZZ_map`, `ParamZ`, `HighDim`, `Hubregtsen`, `MultiControl`; set `Classical` for `svr` and `krr`, since the value labels prediction exports |
+| `MODEL_TYPE` | `qsvr`, `qkrr`, `qgpr`, `svr`, `krr` |
+| `HYPERPARAMETERS` | `OPTIMIZED` selects the script's grid for `qsvr`, `qkrr`, `svr` or `krr` |
+| `QKERNEL` | `Projected` or `Fidelity` for quantum models |
+| `TRAINABLE` | Whether to optimize circuit parameters |
+| `MEASURE` | Pauli observables such as `XYZ`, `X`, `Y` or `Z` |
+| `PERCENT` | Fraction of the training set to sample |
+| `RANDOM_SEED` | Seed for subsampling, initial parameters and simulator sampling |
+| `JOB_NUM` | Repetition identifier used in prediction labels and, with `TRAINABLE=False`, in quantum model filenames |
 
-`QKernel_Methods_Test.py` currently assumes `Water-Scaled` processing.
+`QKernel_Methods_Test.py` uses `Water-Scaled` processing. The detailed
+[experiment instructions](Experiments/README.md) specify the seeds, searches
+and evaluation populations used for each reported result.
 
-## Transferability Evaluation
+After training, run `Transferability_Test.py` with the same settings and set
+`STRUCTURE` to the target molecule. For example, `MOLECULE=Water` and
+`STRUCTURE=Formaldehyde` evaluate a water-trained model on formaldehyde.
+Keep `JOB_NUM` and `RANDOM_SEED` consistent between training and evaluation.
+The script reloads the saved model, refits its kernel object on source training
+data and writes target scores under
+`paper_results/transferability/<BASIS_SET>/<MOLECULE>/`. The training and transfer
+scripts append to existing CSV files, including files extracted from the results
+archive.
 
-Use the same model settings as the training run, then set `STRUCTURE` to the
-molecule to test:
+## Blind-test results
 
-```bash
-ENCODING_DEGREE=atan \
-ENCODING_CIRCUIT=Chebyshev \
-NUM_LAYER=1 \
-MODEL_TYPE=qsvr \
-MOLECULE=Water \
-STRUCTURE=Formaldehyde \
-NUM_FEATURES=5 \
-QKERNEL=Projected \
-DATA_SETUP=Water-Scaled \
-RUN_DATE= \
-JOB_NUM=0 \
-HYPERPARAMETERS=OPTIMIZED \
-TRAINABLE=False \
-BASIS_SET=STO-3G \
-MEASURE=XYZ \
-RANDOM_SEED=0 \
-python Transferability_Test.py
-```
-
-`MOLECULE` is the molecule or molecule group used for training. `STRUCTURE` is
-the held-out molecule being evaluated.
-
-## Blind Evaluation
-
-Use the same model settings as the training run. `Test_Blind.py` evaluates the
-blind molecules listed inside the script:
+The Figure 8 energy records are included in
+[`Experiments/results/blind/energy_mae.csv`](Experiments/results/blind/energy_mae.csv).
+The figure uses the mean absolute energy deviation across the supplied
+repetitions. Generate it with:
 
 ```bash
-ENCODING_DEGREE=atan \
-ENCODING_CIRCUIT=Chebyshev \
-NUM_LAYER=1 \
-MODEL_TYPE=qsvr \
-MOLECULE=Water \
-STRUCTURE=unused \
-NUM_FEATURES=5 \
-QKERNEL=Projected \
-DATA_SETUP=Water-Scaled \
-RUN_DATE= \
-JOB_NUM=0 \
-HYPERPARAMETERS=OPTIMIZED \
-TRAINABLE=False \
-BASIS_SET=STO-3G \
-MEASURE=XYZ \
-RANDOM_SEED=0 \
-python Test_Blind.py
+python Graphs/energy_deviance_graphs.py
 ```
 
-The blind script writes
-`paper_results/blind/<MOLECULE>/Expected_Predicted.csv` and appends
-per-molecule MAE results to the configured blind output CSV.
+`Data Generation/Compute_Blind_Energy.py` evaluates exported predictions using
+the integrals and CCSD amplitudes in `data/blind/`. It uses zero predicted singles,
+with no CCSD iterations. See [Experiments/README.md](Experiments/README.md#blind-test-energy-calculation)
+for the input format and treatment of incomplete exports.
+`Test_Blind.py` generates predictions for the molecules listed inside the script,
+using the same model settings as training, and writes them under
+`paper_results/blind/<MOLECULE>/`.
 
 ## Data generation and figures
 
-`Data Generation/Create_Dataset.py` is the pickle-to-joblib preprocessing
-stage. It accepts `BASIS`, `STRUCTURE`, and `NUM_FILES`, and reuses the
-recovered split under `data/splits/` by default. It refuses to create a new
-split unless `RANDOM_SEED` is explicitly supplied for a new experiment.
+`Data Generation/Create_Dataset.py` converts pickles to joblib datasets. It
+accepts `BASIS`, `STRUCTURE` and `NUM_FILES` (the number of the last pickle file,
+for example 200 for STO-3G water), and reuses `data/splits/` by default.
+Creating a new split requires an explicit `RANDOM_SEED`. The script writes to
+`data/training/<BASIS>/<STRUCTURE>/scaled/`, replacing the extracted files.
+`Data Generation/frozen_core_CCSD_Clean.py` reads training geometries and writes
+pickles under `data/training/`; use `GEOMETRY_ROOT` or `TRAINING_DATA_ROOT` for
+alternative input and output locations.
 
-After creating or updating the environment, regenerate every figure currently
-supported by the preserved evidence with:
+Generate the figures supported by the available data:
 
 ```bash
 python Graphs/regenerate_available_figures.py
 ```
 
-The command writes regenerated PNG files under
-`paper_results/regenerated_figures/`. Molecule artwork is not generated from
-the geometries during this step; the plotting scripts use the archived static
-images under `images/`. Regenerated outputs include heatmaps,
-expected/predicted panels, the training and blind-energy plots, reconstructed
-STO-3G and cc-pVDZ R²/energy panels, `Water_R2_score.png`,
-`Express_entg.png`, `Molecules_Data.png`, the published Figure 1(b) SHAP panel,
-and a reconstructed circuit montage. The preserved Figure 1(b) bar values are
-stored in `Graphs/figure1b_published_shap.csv`, so the manuscript panel
-can be regenerated without a version-sensitive SHAP recomputation. The values
-were recovered at the preserved raster panel's plotted resolution, reproducing
-its bar lengths.
-The Water R² and expressibility/entanglement source CSVs are
-included in `qddcc_paper_results_v1.tar.zst` under
-`paper_results/water_r2_expr_entg/`. The circuit montage marks CPMap as
-unavailable because that source implementation is not distributed with this
-repository.
+Outputs go to `paper_results/regenerated_figures/`. The command includes
+Figures 4b, 5, 8, S14 and S15.
 
-If you only need to validate the non-Qiskit plotting path in a partial local
-environment, use:
+Figure 1(b) can be plotted from `Graphs/figure1b_published_shap.csv`. Those bar
+heights were digitized from the manuscript image at its plotted resolution.
+A fresh SHAP calculation can be requested with `--include-recomputed-shap`;
+it writes a separate output because its values depend on the fitted model and
+SHAP settings. Use `--skip-circuit-montage` to omit the Qiskit circuit montage.
+
+The Docker image contains the Conda environment and TeX. From the repository
+root, build it and run the figure command with the extracted archives mounted:
 
 ```bash
-python Graphs/regenerate_available_figures.py --skip-circuit-montage
+docker build -t qddcc-kernel .
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD/data:/app/data:ro" \
+  -v "$PWD/images:/app/images:ro" \
+  -v "$PWD/paper_results:/app/paper_results" \
+  qddcc-kernel
 ```
 
-For comparison, a fresh SHAP analysis of the recovered model state is excluded
-by default and can be requested explicitly:
+Figures are written to `paper_results/regenerated_figures/`. To run another
+script, append its command, for example `python Experiments/make_table_s2.py`.
 
-```bash
-python Graphs/regenerate_available_figures.py --include-recomputed-shap
-```
-
-That optional analysis writes `ccsd_shap_summary_bar_recomputed.png` and does
-not overwrite the manuscript panel because its values differ from the
-published result.
-
-`Data Generation/expressibilty_and_entanglement_metrics.ipynb` records the
-recovered metric workflow. For a deterministic rerun of the recoverable
-circuits, use:
+For circuit metrics:
 
 ```bash
 python "Data Generation/compute_expr_entg_metrics.py" --seed 0
 ```
 
-The CPMap metric values used in `Express_entg.png` are supplied in the CSVs
-above; the CPMap source circuit itself is external to this repository.
-
-The XYZ-to-pickle and energy scripts are present under
-`Data Generation/`. `frozen_core_CCSD_Clean.py` reads geometries from
-`data/geometries/training/` and writes generated pickles under
-`data/training/` by default. Set `GEOMETRY_ROOT` or `TRAINING_DATA_ROOT` only
-when reproducing the original cluster layout or writing to a scratch location.
+`Graphs/plot_cpmap_blocks.py` draws the symbolic C/P blocks of Figure S15.
+The supplied metric CSVs contain the CPMap values plotted in Figure 9.

@@ -1,0 +1,27 @@
+{
+  "cv_size": 5000,
+  "repetitions": 5,
+  "fractions": [
+    0.01,
+    0.02,
+    0.03,
+    0.04,
+    0.05,
+    0.06,
+    0.07
+  ],
+  "families": [
+    "Classical",
+    "Chebyshev",
+    "MultiControl",
+    "Hubregtsen"
+  ],
+  "circuit": "5 qubits, one layer, direct encoding, fixed parameter seed 0",
+  "sampling": "weighted amplitude selection; independent seeds 42+r, paired across models",
+  "shot_protocol": "1024 independent binomial Pauli samples; fixed cached realization per model run",
+  "gamma": "classical grid of Table S1; PQK fixed 1",
+  "cv": "five unshuffled amplitude folds on training subset",
+  "refit": "full selected training sample",
+  "energy": "zero predicted singles; no CCSD iterations; converged CCSD reference",
+  "split": "cc-pVDZ Water training and test split supplied in the dataset"
+}

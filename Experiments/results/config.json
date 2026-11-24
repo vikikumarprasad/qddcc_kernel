@@ -1,0 +1,101 @@
+{
+  "source": "Formaldehyde",
+  "targets": [
+    "Water",
+    "Ammonia",
+    "Methane",
+    "Ethylene",
+    "Methanol",
+    "Ethane"
+  ],
+  "circuits": [
+    "Hubregtsen",
+    "MultiControl",
+    "Chebyshev"
+  ],
+  "layers": [
+    1,
+    2
+  ],
+  "encodings": [
+    "0",
+    "1",
+    "2",
+    "atan"
+  ],
+  "shot_modes": [
+    "exact",
+    "shots1024"
+  ],
+  "grid": {
+    "C": [
+      0.1,
+      0.25,
+      0.5,
+      1,
+      5,
+      10
+    ],
+    "epsilon": [
+      0.03,
+      0.05,
+      0.08,
+      0.1
+    ],
+    "gamma": [
+      0.001,
+      0.01,
+      0.05,
+      0.1,
+      0.2,
+      0.5,
+      1,
+      2,
+      5
+    ]
+  },
+  "paper_quantum_grid": {
+    "C": [
+      0.1,
+      0.25,
+      0.5,
+      1,
+      5,
+      10
+    ],
+    "epsilon": [
+      0.1,
+      0.05,
+      0.03,
+      0.08
+    ],
+    "gamma": [
+      1
+    ]
+  },
+  "paper_classical_grid": {
+    "C": [
+      0.1,
+      0.5,
+      1,
+      5,
+      10
+    ],
+    "epsilon": [
+      0.1,
+      0.05,
+      0.03,
+      0.08
+    ],
+    "gamma": [
+      0.2,
+      1,
+      0.1,
+      0.01,
+      0.05,
+      0.001
+    ]
+  },
+  "n_cv_conformers": 32,
+  "seed": 0
+}

@@ -1,0 +1,45 @@
+{
+  "model": "ZZ_map_atan_L1",
+  "source": "Water",
+  "basis": "STO-3G",
+  "seed": 42,
+  "shots": 1024,
+  "n_train": 10176,
+  "grid": {
+    "C": [
+      0.1,
+      0.5,
+      1,
+      5,
+      10
+    ],
+    "epsilon": [
+      0.1,
+      0.05,
+      0.03,
+      0.08
+    ],
+    "gamma": [
+      0.2,
+      1.0,
+      0.1,
+      0.01,
+      0.05,
+      0.001
+    ]
+  },
+  "candidates": 120,
+  "gamma_auto": "Classical auto=1/5=.2 is used for both kernels.",
+  "cv": "KFold(5,shuffle=False); independent fold-local optimization for each gamma",
+  "optimization": "COBYLA(maxiter=100,rhobeg=1), SVR(C=1,epsilon=.1,max_iter=50,gamma=candidate_gamma) training MSE",
+  "selection": "Only water CV; transfer targets evaluated once after hyperparameters selected.",
+  "baseline": "Experiments/results/water_reproduction",
+  "versions": {
+    "numpy": "1.26.4",
+    "scipy": "1.15.2",
+    "scikit-learn": "1.7.0",
+    "qiskit": "1.0.2",
+    "qiskit-aer": "0.14.2",
+    "squlearn": "0.8.4"
+  }
+}

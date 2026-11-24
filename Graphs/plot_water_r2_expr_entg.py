@@ -215,10 +215,10 @@ def plot_expr_entg(expr_entg: pd.DataFrame) -> None:
         ax.set_xlim(1, 0.001)
         ax.set_ylim(0, 0.9)
         ax.set_title(f"(L={layer})")
-        ax.set_xlabel("Expressibility")
+        ax.set_xlabel(r"Expressibility, $D_\mathrm{KL}$ (higher expressibility $\rightarrow$)")
         ax.grid(True, which="both", ls="--", linewidth=0.5)
 
-    axes[0].set_ylabel("Entanglement capability")
+    axes[0].set_ylabel("Entangling capability")
 
     func_legend_order = matplotlib_legend_order(
         [name for name in ENCODING_ORDER if name in function_handles_labels],

@@ -16,11 +16,12 @@ __pycache__/
 
 # Large datasets/results are distributed through Zenodo.
 latex/
-data/
+/data
 original_data/
 new_data/
 paper_results/
-images/
+/images
+/models/
 archive/
 *.tar.zst
 timer.dat

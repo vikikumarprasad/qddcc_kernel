@@ -60,24 +60,12 @@ def split_row_counts(molecule: str) -> tuple[int, int]:
 
 
 def conformer_count(molecule: str) -> int:
-    """Return the manuscript-style count of conformer geometries.
-
-    The recovered split metadata contains 198 calculation names for ammonia,
-    methane, and formaldehyde, but the archived raw geometry directories and
-    the original figure count 99 conformer geometries for those systems. Water
-    has 201 archived XYZ files, while the recovered train/test split uses 199.
-    Prefer the original geometry count and only use the split count to account
-    for water geometries excluded from the model-ready split.
-    """
-
-    geometry_count = len(list((GEOMETRY_ROOT / molecule.lower()).glob("*.xyz")))
+    """Return the number of conformer records in the train and test splits."""
     scaled = ROOT / "data" / "training" / "STO-3G" / molecule / "scaled"
     train = joblib.load(scaled / "full_feature_train.bin")
     test = joblib.load(scaled / "full_feature_test.bin")
     split_count = len(set(train["names"]) | set(test["names"]))
-    if molecule == "Water":
-        return min(geometry_count, split_count)
-    return geometry_count
+    return split_count
 
 
 def draw_static_molecule(ax: plt.Axes, molecule: str) -> None:

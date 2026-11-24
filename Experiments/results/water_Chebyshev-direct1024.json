@@ -1,0 +1,48 @@
+{
+  "model": "Chebyshev-direct1024",
+  "host_cpu": "see lscpu",
+  "threads": "1",
+  "stages": {
+    "quantum_features_train": {
+      "seconds": 9.669574734998605,
+      "rss_GB_after": 0.32806912
+    },
+    "gram_matrix_train": {
+      "seconds": 1.094435365001118,
+      "rss_GB_after": 1.157865472
+    },
+    "hyperparameter_search_5fold": {
+      "seconds": 46.15095557299719,
+      "rss_GB_after": 1.165463552
+    },
+    "final_fit": {
+      "seconds": 0.9280212449993996,
+      "rss_GB_after": 1.155469312
+    },
+    "quantum_features_test": {
+      "seconds": 2.076163871002791,
+      "rss_GB_after": 1.156616192
+    },
+    "cross_kernel_test": {
+      "seconds": 0.17432870100310538,
+      "rss_GB_after": 1.364832256
+    },
+    "predict_test": {
+      "seconds": 0.021410680001281435,
+      "rss_GB_after": 1.364832256
+    }
+  },
+  "n_train": 10176,
+  "n_test": 2560,
+  "n_grid_points": 24,
+  "gram_matrix_GB": 0.828407808,
+  "seconds_per_point_features": 0.0009502333662537938,
+  "best_params": {
+    "C": 10,
+    "epsilon": 0.03
+  },
+  "cv_best_r2": 0.9922360845009608,
+  "n_support_vectors": 1319,
+  "test_r2": 0.9927376896566291,
+  "peak_rss_GB": 1.840092
+}

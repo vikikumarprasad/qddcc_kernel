@@ -1,4 +1,4 @@
-"""Reconstruct the STO-3G and cc-pVDZ water R²/energy panels."""
+"""Plot the STO-3G and cc-pVDZ water R²/energy panels."""
 
 from __future__ import annotations
 
@@ -78,10 +78,7 @@ def aggregate(data: pd.DataFrame) -> pd.DataFrame:
     for (training_size, family), group in data.groupby(
         ["Training Data", "Family"], observed=True
     ):
-        # The recovered tables use -50 as a failed-run sentinel and also
-        # contain a few corrupted values as low as -30 million. The published
-        # curves exclude these records. Values in the plotted experimental
-        # range, including small negative scores, are retained.
+        # Figure 4a summaries use -50 as the MP2 R² placeholder.
         r2 = group.loc[group["R2"] >= MIN_VALID_R2, "R2"].to_numpy()
         energy = group["MAE Energy Devience"].to_numpy()
 
@@ -106,6 +103,25 @@ def aggregate(data: pd.DataFrame) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows)
+
+
+def load_ccpvdz_summary() -> pd.DataFrame:
+    """Read the 140 complete cc-pVDZ training runs for Figure 4b."""
+    directory = ROOT / "Experiments/results/water_learning_curve"
+    runs = pd.read_csv(directory / "runs.csv")
+    counts = runs.groupby(["fraction", "family"]).size()
+    if len(counts) != 28 or counts.nunique() != 1 or not (runs.n_test == 231040).all():
+        raise ValueError("The cc-pVDZ results are incomplete or unbalanced")
+    s = pd.read_csv(directory / "summary.csv").rename(columns={
+        "n_train": "Training Data", "family": "Family", "r2_mean": "R2_mean",
+        "r2_sem": "R2_std", "energy_mean_mEh": "energy_mean", "energy_sem_mEh": "energy_std"})
+    s["energy_mean"] /= 1000
+    s["energy_std"] /= 1000
+    ref = pd.read_csv(directory / "energy_references.csv")
+    mp2 = float(np.mean(np.abs(ref.mp2_archive - ref.ccsd_reference)))
+    extra = pd.DataFrame({"Training Data": sorted(s["Training Data"].unique()), "Family": "MP2",
+                          "energy_mean": mp2, "energy_std": 0., "R2_mean": np.nan, "R2_std": np.nan})
+    return pd.concat([s, extra], ignore_index=True)
 
 
 def style_axis(ax: plt.Axes) -> None:
@@ -219,7 +235,9 @@ def plot_ccpvdz(summary: pd.DataFrame) -> None:
     plot_mp2(energy_ax, summary)
 
     r2_top.set_ylim(-0.05, 1.0)
-    r2_bottom.set_ylim(-1.5, -0.7)
+    classical = summary[summary.Family == "Classical"]
+    r2_bottom.set_ylim(float((classical.R2_mean-classical.R2_std).min())-.15,
+                       min(-.1, float((classical.R2_mean+classical.R2_std).max())+.15))
     r2_top.spines.bottom.set_visible(False)
     r2_bottom.spines.top.set_visible(False)
     r2_top.tick_params(labelbottom=False, bottom=False)
@@ -269,8 +287,8 @@ def plot_ccpvdz(summary: pd.DataFrame) -> None:
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     plot_sto3g(aggregate(load_summary("STO-3G")))
-    plot_ccpvdz(aggregate(load_summary("cc-pVDZ")))
-    print(f"Wrote reconstructed water panels to {OUTPUT_DIR}")
+    plot_ccpvdz(load_ccpvdz_summary())
+    print(f"Wrote water panels to {OUTPUT_DIR}")
 
 
 if __name__ == "__main__":

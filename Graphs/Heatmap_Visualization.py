@@ -106,10 +106,19 @@ base_names = [extract_circuit_parts(col) for col in df_mean.columns]
 df_mean_aggr = df_mean.apply(pd.to_numeric).T.groupby(base_names).mean().T
 df_std_aggr = df_std.apply(pd.to_numeric).T.groupby(base_names).mean().T
 
+# Water's classical column uses the model selected by source cross-validation.
+if train_molecule == "Water":
+    baseline_path = Path(__file__).resolve().parents[1] / "Experiments/results/water_reproduction/classical_scores.csv"
+    baseline = pd.read_csv(baseline_path)
+    baseline = baseline.loc[baseline.model == "source_cv"].set_index("molecule")
+    if baseline.index.has_duplicates or not set(order).issubset(baseline.index):
+        raise ValueError("The water baseline is incomplete or duplicated")
+    df_mean_aggr.loc[order, "Classical SVR"] = baseline.loc[order, "test_r2"]
+    df_std_aggr.loc[order, "Classical SVR"] = 0.0
+
 # Do not display a model column when its archived transferability results are
 # incomplete. In the formaldehyde-trained data, MultiControl (L=2) and YZ_CX
-# (L=2) have no Ethane result, and the corresponding saved models were not
-# archived, so those columns cannot be completed reproducibly.
+# (L=2) have no Ethane result.
 transfer_rows = [
     molecule for molecule in df_mean_aggr.index if molecule != train_molecule
 ]

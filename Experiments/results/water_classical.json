@@ -1,0 +1,32 @@
+{
+  "model": "classical",
+  "host_cpu": "see lscpu",
+  "threads": "1",
+  "stages": {
+    "hyperparameter_search_5fold": {
+      "seconds": 60.23342349700033,
+      "rss_GB_after": 0.134283264
+    },
+    "final_fit": {
+      "seconds": 0.06783226900006412,
+      "rss_GB_after": 0.13289472
+    },
+    "inference_test": {
+      "seconds": 0.00207673499971861,
+      "rss_GB_after": 0.13289472
+    }
+  },
+  "n_train": 10176,
+  "n_test": 2560,
+  "n_grid_points": 120,
+  "best_params": {
+    "C": 10,
+    "epsilon": 0.03,
+    "gamma": "auto",
+    "kernel": "rbf"
+  },
+  "cv_best_r2": 0.9963593267362778,
+  "n_support_vectors": 39,
+  "test_r2": 0.9968378464525716,
+  "peak_rss_GB": 0.229508
+}

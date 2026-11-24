@@ -1,0 +1,48 @@
+{
+  "model": "MultiControl-direct1024",
+  "host_cpu": "see lscpu",
+  "threads": "1",
+  "stages": {
+    "quantum_features_train": {
+      "seconds": 11.767868732000352,
+      "rss_GB_after": 0.328577024
+    },
+    "gram_matrix_train": {
+      "seconds": 1.0623982950019126,
+      "rss_GB_after": 1.158160384
+    },
+    "hyperparameter_search_5fold": {
+      "seconds": 44.80027871600032,
+      "rss_GB_after": 1.157967872
+    },
+    "final_fit": {
+      "seconds": 0.8445188469995628,
+      "rss_GB_after": 1.15474432
+    },
+    "quantum_features_test": {
+      "seconds": 2.100496518,
+      "rss_GB_after": 1.157267456
+    },
+    "cross_kernel_test": {
+      "seconds": 0.16031081400069525,
+      "rss_GB_after": 1.36554496
+    },
+    "predict_test": {
+      "seconds": 0.022163906000059796,
+      "rss_GB_after": 1.36554496
+    }
+  },
+  "n_train": 10176,
+  "n_test": 2560,
+  "n_grid_points": 24,
+  "gram_matrix_GB": 0.828407808,
+  "seconds_per_point_features": 0.0011564336411163869,
+  "best_params": {
+    "C": 10,
+    "epsilon": 0.03
+  },
+  "cv_best_r2": 0.994340672643102,
+  "n_support_vectors": 1282,
+  "test_r2": 0.9946138488676642,
+  "peak_rss_GB": 1.83162
+}

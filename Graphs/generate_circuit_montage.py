@@ -1,4 +1,4 @@
-"""Generate a source-backed text montage of the recoverable encoding circuits."""
+"""Generate a text montage of the encoding circuits."""
 
 from __future__ import annotations
 
@@ -12,8 +12,7 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "qddcc-mplconfig"))
 os.environ.setdefault("XDG_CACHE_HOME", str(Path(tempfile.gettempdir()) / "qddcc-cache"))
 
-# sQUlearn currently imports a deprecated PennyLane compatibility alias. It
-# does not affect Qiskit circuit construction and cannot be fixed here.
+# Suppress the PennyLane deprecation warning raised when importing sQUlearn.
 warnings.filterwarnings(
     "ignore",
     message="Observable is deprecated.*",
@@ -135,18 +134,17 @@ def main() -> None:
         ax.axis("off")
         if circuit is None:
             text = (
-                "Original CPMap implementation unavailable.\n"
-                "Request the source circuit from the project owner."
+                "Reference panel: the CPMap C/P block diagram\n"
+                "is shown in Supporting Information Figure S15."
             )
             ax.text(
-                0.5,
-                0.5,
+                0.01,
+                0.94,
                 text,
-                ha="center",
-                va="center",
-                fontsize=13,
-                color="#8b0000",
-                bbox={"boxstyle": "round", "facecolor": "#fff2f2", "edgecolor": "#8b0000"},
+                ha="left",
+                va="top",
+                family="monospace",
+                fontsize=7,
             )
             continue
 
@@ -162,7 +160,7 @@ def main() -> None:
         )
 
     fig.suptitle(
-        "Recovered encoding-circuit definitions (5 qubits, L=1)",
+        "Encoding circuits (5 qubits, L=1)",
         fontsize=18,
         fontweight="bold",
     )

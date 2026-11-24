@@ -1,9 +1,8 @@
-"""Patch the historical circuit montage to use arctan instead of atan.
+"""Apply arctan gate labels to the circuit montage image.
 
-The original source used to draw ``latex/Figures/circuit_drawings.png`` is not
-available. This script performs the minimal reproducible bitmap edit requested
-for the manuscript: replacing the five ChebyshevPQC labels in panel (a) from
-``atan`` to ``arctan`` while leaving the rest of the historical montage intact.
+Redraws the five ChebyshevPQC gate labels in panel (a) of
+``latex/Figures/circuit_drawings.png`` using arctan and saves the image in
+place.
 """
 
 from __future__ import annotations
@@ -56,16 +55,13 @@ def patch_image(path: Path = DEFAULT_IMAGE) -> None:
     image = Image.open(path).convert("RGBA")
     draw = ImageDraw.Draw(image)
 
-    # First remove any previous failed patch text. These rectangles lie either
-    # inside the gate boxes redrawn below or in whitespace between panel rows.
+    # Clear the gate-label areas and the surrounding whitespace.
     for y in (218, 592, 968):
         draw.rectangle((780, y - 70, 1050, y + 70), fill="white")
     for y in (1342, 1717):
         draw.rectangle((780, y - 65, 1050, y + 55), fill="white")
 
-    # Coordinates are in the original 4961 x 5906 manuscript PNG. The gate-box
-    # edges were measured from the historical bitmap so the rest of the montage
-    # remains untouched.
+    # Gate-box coordinates are measured in the 4961 x 5906 manuscript PNG.
     box_left, box_right = 633, 1199
     box_tops = (190, 396, 602, 809, 1015)
     box_bottoms = (310, 517, 723, 929, 1135)
@@ -89,8 +85,7 @@ def patch_image(path: Path = DEFAULT_IMAGE) -> None:
         y = top + (bottom - top - label_image.height) // 2
         image.alpha_composite(label_image, (x, y))
 
-    # Repair the panel-(c) gate border overlapped by the historical-edit
-    # cleanup above.
+    # Redraw the panel-(c) gate border overlapping the cleared area.
     repair_box = (853, 1561, 1115, 1678)
     draw.rectangle(repair_box, fill="white", outline="black", width=6)
     label_image = render_math(r"$R_X(\theta_0)$", max_width=220, max_height=88)
